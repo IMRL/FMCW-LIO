@@ -7,4 +7,4 @@ This is the code repository for the IEEE-RAL'24 paper "FMCW-LIO: A Doppler LiDAR
 
 
 # Reference:
-FMCW-LIO: Mingle Zhao, Jiahao Wang, Tianxiao Gao, Chengzhong Xu, and Hui Kong, FMCW-LIO: A Doppler LiDAR-Inertial Odometry, IEEE Robotics and Automation Letters (IEEE-RAL), 2024
+FMCW-LIO: Mingle Zhao, Jiahao Wang, Tianxiao Gao, Chengzhong Xu, and Hui Kong, FMCW-LIO: A Doppler LiDAR-Inertial Odometry, IEEE Robotics and Automation Letters (IEEE RA-L), 2024
