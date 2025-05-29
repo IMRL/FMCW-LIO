@@ -2,7 +2,7 @@
 This is the code repository for the IEEE-RAL'24 paper "FMCW-LIO: A Doppler LiDAR-Inertial Odometry"
 
 
-[![FMCW-LIO: A Doppler LiDAR-Inertial Odometry](FMCW-LIO.jpg)](https://www.youtube.com/watch?v=CKj4ihKs8aI "FMCW-LIO: A Doppler LiDAR-Inertial Odometry")
+[![FMCW-LIO: A Doppler LiDAR-Inertial Odometry](FMCW-LIO_cover.png)](https://youtu.be/2yuZYw91AP8 "FMCW-LIO: A Doppler LiDAR-Inertial Odometry")
 
 
 
