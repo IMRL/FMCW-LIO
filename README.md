@@ -1,12 +1,13 @@
 # FMCW-LIO
-This is the code repository for the IEEE RA-L'24 paper "FMCW-LIO: A Doppler LiDAR-Inertial Odometry"
 
+This is the code repository for the IEEE RA-L'24 paper "FMCW-LIO: A Doppler LiDAR-Inertial Odometry"
 
 [![FMCW-LIO: A Doppler LiDAR-Inertial Odometry](FMCW-LIO_cover.png)](https://youtu.be/2yuZYw91AP8 "FMCW-LIO: A Doppler LiDAR-Inertial Odometry")
 
-
+Coming soon. 
 
 # Reference:
+
 Zhao, Mingle, Jiahao Wang, Tianxiao Gao, Chengzhong Xu, and Hui Kong. "FMCW-LIO: A doppler LiDAR-inertial odometry." IEEE Robotics and Automation Letters (2024). 
 
 ```
