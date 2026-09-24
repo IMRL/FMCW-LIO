@@ -1,0 +1,155 @@
+pose_io:
+    dump: false
+    dir_path: "/home/xxx/fmcw_lio_ws/log/"
+
+map_io:
+    dump: false
+    dir_path: "/home/xxx/fmcw_lio_ws/map/"
+
+ground_truth_io:
+    display: false
+    file_path: "/home/xxx/fmcw_lio_ws/gt/gt.txt"
+
+common:
+    topic_imu: "/imu/data"
+    topic_lidar: "/aeva/AeriesII/point_cloud_frame"
+    # time difference of LiDAR w.r.t. IMU
+    time_diff_bl: 0.0
+    # extrinsic parameter of LiDAR frame w.r.t. IMU frame
+    R_bl: [ 1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0 ]
+    p_bl_b: [ 0.0180, 0.0000, -0.0434 ]
+    # use Doppler velocity
+    use_doppler: true
+
+imu_preprocess:
+    gravity_scale: 9.81
+    scaling: false
+
+scan_preprocess:
+    # { Aeva = 1, Hesai = 2, RoboSense = 3, Ouster = 4, Velodyne = 5, Livox = 6 }
+    lidar_type: 1
+    scan_rate: 10
+    skip_radius: 0.5
+    point_select_interval_lio: 4
+    # is the scan message timestamp the scan end timestamp
+    scan_end_timestamp: false
+
+initialization:
+    # { StaticWithoutBias = 1, StaticWithBias = 2, FreeInit = 3 }
+    init_method: 2
+    max_imu_num: 100
+    point_select_interval_init: 4
+    init_mapping: false
+    # Free-Init
+    # point threshold for downsampling
+    point_num_thresh: 36
+    # robust Doppler velocity bootstrap
+    use_bootstrap_velocity: true
+    voxel_size_bootstrap: 2.0
+    iteration_num_bootstrap: 10
+    max_cond_num_bootstrap: 10000.0
+    detect_dynamic_threshold_bootstrap: 0.5
+    # prior IMU bias
+    gyroscope_bias_prior: [ 0.0, 0.0, 0.0 ]
+    accelerometer_bias_prior: [ 0.0, 0.0, 0.0 ]
+    # DIV initial covariance
+    angular_velocity_cov_init_div: [ 1.0e-2, 1.0e-2, 1.0e-2 ]
+    body_velocity_cov_init_div: [ 1.0e+0, 1.0e+0, 1.0e+0 ]
+    gyroscope_bias_cov_init_div: [ 1.0e-6, 1.0e-6, 1.0e-6 ]
+    # DIV propagation covariance
+    angular_velocity_cov_prop_div: [ 1.0e+2, 1.0e+2, 1.0e+2 ]
+    body_velocity_cov_prop_div: [ 1.0e+1, 1.0e-1, 1.0e-1 ]
+    gyroscope_bias_cov_prop_div: [ 1.0e-2, 1.0e-2, 1.0e-2 ]
+    # DIV update covariance
+    angular_rate_cov_div: [ 1.0e-2, 1.0e-2, 1.0e-2 ]
+    doppler_velocity_cov_div: 1.0e-1
+    # IMU measurement number threshold for world frame definition
+    imu_num_thresh_world_frame: 5
+    # zero velocity detection
+    zero_angular_velocity_thresh: 0.1
+    zero_velocity_thresh: 0.3
+    # IMU correlation time (s)
+    imu_correlation_time: 3600.0
+    # dynamic point removal
+    use_dynamic_point_removal: true
+    remove_dynamic_threshold: 1.0
+    # optimization
+    accelerometer_bias_regularization_weight: 50.0
+    cauchy_loss_scale: 100.0
+    thread_num: 4
+    max_iteration_num: 50
+    max_solver_time_in_seconds: 0.1
+
+propagation:
+    # { RungeKutta2 = 1, RungeKutta3 = 2, RungeKutta4 = 3, Mechanization = 4, ACI2 = 5 }
+    integration_method: 1
+    # { RungeKutta2 = 1, RungeKutta3 = 2, RungeKutta4 = 3, Mechanization = 4, ACI2 = 5 }
+    compensation_method: 1
+    # { NearestNeighbor = 1, LinearInterpolation = 2, RightEndpoint = 3 }
+    point_weight_method: 2
+    # IMU parameter
+    gyroscope_cov: 0.1
+    accelerometer_cov: 0.1
+    gyroscope_bias_cov: 0.0001
+    accelerometer_bias_cov: 0.0001
+
+update:
+    iteration_num: 3
+    nearest_point_num: 5
+    point_cov: 0.001
+
+mapping:
+    # { ikdTree = 1, iVox = 2 }
+    map_structure_type: 1
+    voxel_filter_size_scan: 0.5
+    # ikd-Tree parameter
+    detection_range: 150.0
+    map_region_length: 1000.0
+    voxel_filter_size_map: 0.5
+    # iVox parameter
+    ivox_resolution: 0.5
+    # { CENTER = 1, NEARBY6 = 2, NEARBY18 = 3, NEARBY26 = 4 }
+    ivox_nearby_type: 2
+
+publishing:
+    publish_dense_scan: false
+    publish_tf_imu_rate: false
+
+velocimeter:
+    # min and max point distance from LiDAR origin
+    min_point_dist: 0.5
+    max_point_dist: 150.0
+    # min and max point height (z value) in LiDAR frame
+    min_point_z: -100.0
+    max_point_z: 100.0
+    # threshold for valid azimuth and elevation angle (degree)
+    azimuth_thresh_deg: 55
+    elevation_thresh_deg: 15
+    # zero velocity detection and update
+    zero_velocity_thresh: 0.12
+    zero_velocity_sigma: [ 0.01, 0.02, 0.02 ]
+    # result filtering
+    max_cond_num: 1000.0
+    max_sigma: [ 0.05, 0.10, 0.10 ]
+    # LSQ parameter
+    use_cos_weight: false
+    # { None = 1, Cauchy = 2 }
+    robust_kernel: 1
+    # sigma offset
+    vel_sigma_offset: [ 0.05, 0.10, 0.15 ]
+    # RANSAC parameter
+    use_ransac: false
+    outlier_prob: 0.3
+    success_prob: 0.999
+    ransac_point_num: 3
+    inlier_thresh: 0.1
+    # { Uniform = 1, CosWeight = 2 }
+    sampling_method: 2
+    azimuth_interval_num: 11
+    elevation_interval_num: 3
+    # dynamic point removal
+    use_dynamic_point_removal: true
+    pre_remove: false
+    remove_dynamic_threshold: 0.8

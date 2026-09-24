@@ -1,0 +1,13 @@
+<launch>
+	<arg name="rviz" default="true" />
+    <arg name="autorun" default="true" />
+
+	<rosparam command="load" file="$(find fmcw_lio)/config/livox_avia_fast_livo2.yaml" />
+
+    <node pkg="fmcw_lio" type="fmcw_lio" name="fmcw_lio_node" output="screen" />
+
+	<group if="$(arg rviz)">
+		<node pkg="rviz" type="rviz" name="fmcw_lio_rviz" args="-d $(find fmcw_lio)/rviz/fmcw_lio_3d.rviz" />
+	</group>
+
+</launch>

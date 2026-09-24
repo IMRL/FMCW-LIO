@@ -1,0 +1,78 @@
+pose_io:
+    dump: false
+    dir_path: "/home/xxx/fmcw_lio_ws/log/"
+
+map_io:
+    dump: false
+    dir_path: "/home/xxx/fmcw_lio_ws/map/"
+
+ground_truth_io:
+    display: false
+    file_path: "/home/xxx/fmcw_lio_ws/gt/gt.txt"
+
+common:
+    topic_imu: "/livox/imu"
+    topic_lidar: "/livox/lidar"
+    # time difference of LiDAR w.r.t. IMU
+    time_diff_bl: 0.0
+    # extrinsic parameter of LiDAR frame w.r.t. IMU frame
+    R_bl: [ 1.0, 0.0, 0.0, 
+            0.0, 1.0, 0.0, 
+            0.0, 0.0, 1.0 ]
+    p_bl_b: [ -0.011, -0.02329, 0.04412 ]
+    # use Doppler velocity
+    use_doppler: false
+
+imu_preprocess:
+    gravity_scale: 9.81
+    scaling: true
+
+scan_preprocess:
+    # { Aeva = 1, Hesai = 2, RoboSense = 3, Ouster = 4, Velodyne = 5, Livox = 6 }
+    lidar_type: 6
+    scan_rate: 10
+    skip_radius: 0.5
+    point_select_interval_lio: 3
+    # is the scan message timestamp the scan end timestamp
+    scan_end_timestamp: false
+
+initialization:
+    #  { StaticWithoutBias = 1, StaticWithBias = 2 }
+    init_method: 2
+    max_imu_num: 100
+    init_mapping: true
+
+propagation:
+    # { RungeKutta2 = 1, RungeKutta3 = 2, RungeKutta4 = 3, Mechanization = 4, ACI2 = 5 }
+    integration_method: 1
+    # { RungeKutta2 = 1, RungeKutta3 = 2, RungeKutta4 = 3, Mechanization = 4, ACI2 = 5 }
+    compensation_method: 1
+    # { NearestNeighbor = 1, LinearInterpolation = 2, RightEndpoint = 3 }
+    point_weight_method: 1
+    # IMU parameter
+    gyroscope_cov: 0.1
+    accelerometer_cov: 0.1
+    gyroscope_bias_cov: 0.0001
+    accelerometer_bias_cov: 0.0001
+
+update:
+    iteration_num: 3
+    nearest_point_num: 5
+    point_cov: 0.001
+
+mapping:
+    # { ikdTree = 1, iVox = 2 }
+    map_structure_type: 1
+    voxel_filter_size_scan: 0.5
+    # ikd-Tree parameter
+    detection_range: 100.0
+    map_region_length: 1000.0
+    voxel_filter_size_map: 0.5
+    # iVox parameter
+    ivox_resolution: 0.5
+    # { CENTER = 1, NEARBY6 = 2, NEARBY18 = 3, NEARBY26 = 4 }
+    ivox_nearby_type: 2
+
+publishing:
+    publish_dense_scan: true
+    publish_tf_imu_rate: false
