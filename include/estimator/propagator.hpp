@@ -19,15 +19,15 @@
  *
  * IEEE Xplore Link: https://ieeexplore.ieee.org/document/10518074
  *                   https://ieeexplore.ieee.org/document/10740796
- * arXiv Paper Link:
- *
- * Code & Sequence : https://github.com/IMRL/FMCW-LIO
+ * arXiv Paper Link: https://arxiv.org/abs/2609.29374
+ *                   https://arxiv.org/abs/2609.29375
+ * Code & Dataset  : https://github.com/IMRL/FMCW-LIO
  *                   https://github.com/IMRL/Free-Init
  * Experiment Video: https://youtu.be/2yuZYw91AP8
  *                   https://youtu.be/FbyzvJ-4bHI
  *
  * Citation: @article{zhao2024fmcw-lio,
- *               title={{FMCW-LIO: A Doppler LiDAR-Inertial Odometry}},
+ *               title={FMCW-LIO: A Doppler LiDAR-Inertial Odometry},
  *               author={Zhao, Mingle and Wang, Jiahao and Gao, Tianxiao and
  *                       Xu, Chengzhong and Kong, Hui},
  *               journal={IEEE Robotics and Automation Letters},
@@ -39,9 +39,9 @@
  *           }
  *
  *           @article{zhao2024free-init,
- *               title={{Free-Init: Scan-Free, Motion-Free, and
- *                       Correspondence-Free Initialization for
- *                       Doppler LiDAR-Inertial Systems}},
+ *               title={Free-Init: Scan-Free, Motion-Free, and
+ *                      Correspondence-Free Initialization for
+ *                      Doppler LiDAR-Inertial Systems},
  *               author={Zhao, Mingle and Wang, Jiahao and Gao, Tianxiao and
  *                       Xu, Chengzhong and Kong, Hui},
  *               journal={IEEE Robotics and Automation Letters},
@@ -56,6 +56,7 @@
 #ifndef PROPAGATOR_HPP
 #define PROPAGATOR_HPP
 
+#include "bithub/bithub.hpp"
 #include "compensator/compensator.hpp"
 
 // fmcw_lio
@@ -90,12 +91,8 @@ public:
 
     // propagate state and covariance using IMU data
     void propagateStateAndCov(const std::shared_ptr<StateBase>& state_ptr, Eigen::MatrixXd& P,
-                              const std::shared_ptr<MeasPackLI>& meas_ptr);
-
-    // set callback function for imu-rate tf publish
-    void setTFPublishFunction(TFPublishFunction tf_publish_func) {
-        tf_publish_func_ = std::move(tf_publish_func);
-    }
+                              const std::shared_ptr<MeasPackLI>& meas_ptr,
+                              const std::shared_ptr<const BitHub>& bithub_ptr);
 
     // get IMU at scan end time: (angular rate, specific force)
     [[nodiscard]] std::pair<Eigen::Vector3d, Eigen::Vector3d> getIMUScanEnd() const noexcept {
@@ -230,9 +227,6 @@ private:
 
     // propagation state and measurement for motion compensation
     std::shared_ptr<std::vector<std::shared_ptr<const StateBase>>> states_propagation_ptr_;
-
-    // callback invoked after each intermediate IMU propagation
-    TFPublishFunction tf_publish_func_;
 
     // integrate function
     IntegrateFunction integrate_func_;

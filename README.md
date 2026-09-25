@@ -3,7 +3,7 @@
 # $\color{#F1261D}{𝗙}\color{#FF9200}{𝗠}\color{#FDDB2A}{𝗖}\color{#4DE42B}{𝗪}\color{#0FF692}{\text{-}}\color{#0BD8F9}{𝗟}\color{#2C22FB}{𝗜}\color{#C32DF3}{𝗢}$<br>A Doppler LiDAR-Inertial Odometry
 
 <a href="https://ieeexplore.ieee.org/document/10518074"><img src='https://img.shields.io/badge/PDF-IEEE%20Xplore-00629B?logo=ieee&logoColor=white' alt='PDF'></a>
-<a href="https://arxiv.org/"><img src='https://img.shields.io/badge/PDF-arXiv-B31B1B?logo=arxiv&logoColor=white' alt='PDF'></a>
+<a href="https://arxiv.org/abs/2609.29374"><img src='https://img.shields.io/badge/PDF-arXiv-B31B1B?logo=arxiv&logoColor=white' alt='PDF'></a>
 <a href="https://youtu.be/2yuZYw91AP8"><img src='https://img.shields.io/badge/Video-YouTube-FF0000?logo=youtube&logoColor=white' alt='Video'></a>
 <a href="https://huggingface.co/datasets/zha0ming1e/FMCW-LIO_Dataset"><img src='https://img.shields.io/badge/Dataset-Hugging%20Face-FFD21E?logo=huggingface&logoColor=white' alt='Dataset'></a>
 <a href="https://drive.google.com/drive/folders/17EenivWTAenEyNQexaLnnJ5iHd6pAKX7?usp=sharing"><img src='https://img.shields.io/badge/Dataset-Google%20Drive-4285F4?logo=googledrive&logoColor=white' alt='Dataset'></a>

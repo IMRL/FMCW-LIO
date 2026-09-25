@@ -19,15 +19,15 @@
  *
  * IEEE Xplore Link: https://ieeexplore.ieee.org/document/10518074
  *                   https://ieeexplore.ieee.org/document/10740796
- * arXiv Paper Link:
- *
- * Code & Sequence : https://github.com/IMRL/FMCW-LIO
+ * arXiv Paper Link: https://arxiv.org/abs/2609.29374
+ *                   https://arxiv.org/abs/2609.29375
+ * Code & Dataset  : https://github.com/IMRL/FMCW-LIO
  *                   https://github.com/IMRL/Free-Init
  * Experiment Video: https://youtu.be/2yuZYw91AP8
  *                   https://youtu.be/FbyzvJ-4bHI
  *
  * Citation: @article{zhao2024fmcw-lio,
- *               title={{FMCW-LIO: A Doppler LiDAR-Inertial Odometry}},
+ *               title={FMCW-LIO: A Doppler LiDAR-Inertial Odometry},
  *               author={Zhao, Mingle and Wang, Jiahao and Gao, Tianxiao and
  *                       Xu, Chengzhong and Kong, Hui},
  *               journal={IEEE Robotics and Automation Letters},
@@ -39,9 +39,9 @@
  *           }
  *
  *           @article{zhao2024free-init,
- *               title={{Free-Init: Scan-Free, Motion-Free, and
- *                       Correspondence-Free Initialization for
- *                       Doppler LiDAR-Inertial Systems}},
+ *               title={Free-Init: Scan-Free, Motion-Free, and
+ *                      Correspondence-Free Initialization for
+ *                      Doppler LiDAR-Inertial Systems},
  *               author={Zhao, Mingle and Wang, Jiahao and Gao, Tianxiao and
  *                       Xu, Chengzhong and Kong, Hui},
  *               journal={IEEE Robotics and Automation Letters},
@@ -68,20 +68,22 @@ namespace fmcw_lio {
 // FMCWLIO
 class FMCWLIO {
 public:
-    explicit FMCWLIO(const std::shared_ptr<Config>& config_ptr);
+    explicit FMCWLIO(ros::NodeHandle& nh,
+                     const std::shared_ptr<Config>& config_ptr);
 
     ~FMCWLIO() = default;
 
     // FMCW-LIO system evolution
-    void evolveSystem(const std::shared_ptr<MeasPackLI>& meas_ptr);
+    void evolveSystem();
+
+    // FMCW-LIO system iteration
+    void iterateSystem(const std::shared_ptr<MeasPackLI>& meas_ptr);
 
     // whether system is initialized
     [[nodiscard]] bool isInitialized() const noexcept { return is_init_success_; }
 
-    // set callback function for imu-rate tf publish
-    void setTFPublishFunction(TFPublishFunction tf_publish_func) {
-        filter_ptr_->setTFPublishFunction(std::move(tf_publish_func));
-    }
+    // save map
+    void dumpMap() { bithub_ptr_->dumpMap(); }
 
     // get system state
     [[nodiscard]] std::shared_ptr<StateBase> getState() const noexcept { return state_system_ptr_; }
@@ -165,6 +167,9 @@ public:
 private:
     // configuration pointer
     const std::shared_ptr<Config> config_ptr_;
+
+    // bithub pointer
+    const std::shared_ptr<BitHub> bithub_ptr_;
 
     // system state pointer
     const std::shared_ptr<StateBase> state_system_ptr_;

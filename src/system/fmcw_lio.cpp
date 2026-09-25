@@ -19,15 +19,15 @@
  *
  * IEEE Xplore Link: https://ieeexplore.ieee.org/document/10518074
  *                   https://ieeexplore.ieee.org/document/10740796
- * arXiv Paper Link:
- *
- * Code & Sequence : https://github.com/IMRL/FMCW-LIO
+ * arXiv Paper Link: https://arxiv.org/abs/2609.29374
+ *                   https://arxiv.org/abs/2609.29375
+ * Code & Dataset  : https://github.com/IMRL/FMCW-LIO
  *                   https://github.com/IMRL/Free-Init
  * Experiment Video: https://youtu.be/2yuZYw91AP8
  *                   https://youtu.be/FbyzvJ-4bHI
  *
  * Citation: @article{zhao2024fmcw-lio,
- *               title={{FMCW-LIO: A Doppler LiDAR-Inertial Odometry}},
+ *               title={FMCW-LIO: A Doppler LiDAR-Inertial Odometry},
  *               author={Zhao, Mingle and Wang, Jiahao and Gao, Tianxiao and
  *                       Xu, Chengzhong and Kong, Hui},
  *               journal={IEEE Robotics and Automation Letters},
@@ -39,9 +39,9 @@
  *           }
  *
  *           @article{zhao2024free-init,
- *               title={{Free-Init: Scan-Free, Motion-Free, and
- *                       Correspondence-Free Initialization for
- *                       Doppler LiDAR-Inertial Systems}},
+ *               title={Free-Init: Scan-Free, Motion-Free, and
+ *                      Correspondence-Free Initialization for
+ *                      Doppler LiDAR-Inertial Systems},
  *               author={Zhao, Mingle and Wang, Jiahao and Gao, Tianxiao and
  *                       Xu, Chengzhong and Kong, Hui},
  *               journal={IEEE Robotics and Automation Letters},
@@ -59,7 +59,12 @@
 namespace fmcw_lio {
 
 // FMCWLIO
-FMCWLIO::FMCWLIO(const std::shared_ptr<Config>& config_ptr) : config_ptr_(config_ptr),
+FMCWLIO::FMCWLIO(ros::NodeHandle& nh,
+                 const std::shared_ptr<Config>& config_ptr) : config_ptr_(config_ptr),
+                                                              bithub_ptr_(std::make_shared<BitHub>(nh,
+                                                                                                   config_ptr_,
+                                                                                                   std::shared_ptr<const FMCWLIO>(this,
+                                                                                                                                  [](const FMCWLIO*) noexcept -> void {}))),
                                                               state_system_ptr_(std::make_shared<StateSystem>(config_ptr_)),
                                                               initializer_ptr_(std::make_shared<Initializer>(config_ptr_)),
                                                               filter_ptr_(std::make_shared<Filter>(config_ptr_)),
@@ -88,8 +93,17 @@ FMCWLIO::FMCWLIO(const std::shared_ptr<Config>& config_ptr) : config_ptr_(config
     vel_update_time_diff_thresh_ = vel_update_time_ratio_ / config_ptr_->scan_rate;
 }
 
-void FMCWLIO::evolveSystem(const std::shared_ptr<MeasPackLI>& meas_ptr) {
-    // FMCW-LIO system evolves
+void FMCWLIO::evolveSystem() {
+    // FMCW-LIO system evolves via iteration over time
+    if (bithub_ptr_->packMeasLI()) {
+        this->iterateSystem(bithub_ptr_->getMeasPackLI());
+
+        bithub_ptr_->publishData();
+    }
+}
+
+void FMCWLIO::iterateSystem(const std::shared_ptr<MeasPackLI>& meas_ptr) {
+    // FMCW-LIO system iterates
     if (is_first_scan_sys_) {
         initializer_ptr_->bootstrapFreeInit(meas_ptr);
         is_first_scan_sys_ = false;
@@ -138,7 +152,8 @@ void FMCWLIO::evolveSystem(const std::shared_ptr<MeasPackLI>& meas_ptr) {
 
     // filter propagation
     filter_ptr_->propagateFilter(state_system_ptr_,
-                                 meas_ptr);
+                                 meas_ptr,
+                                 bithub_ptr_);
 
     // motion compensation for LiDAR scan
     scan_compensated_lidar_ptr_ = filter_ptr_->getScanCompensatedInLiDAR();

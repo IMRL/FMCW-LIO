@@ -19,15 +19,15 @@
  *
  * IEEE Xplore Link: https://ieeexplore.ieee.org/document/10518074
  *                   https://ieeexplore.ieee.org/document/10740796
- * arXiv Paper Link:
- *
- * Code & Sequence : https://github.com/IMRL/FMCW-LIO
+ * arXiv Paper Link: https://arxiv.org/abs/2609.29374
+ *                   https://arxiv.org/abs/2609.29375
+ * Code & Dataset  : https://github.com/IMRL/FMCW-LIO
  *                   https://github.com/IMRL/Free-Init
  * Experiment Video: https://youtu.be/2yuZYw91AP8
  *                   https://youtu.be/FbyzvJ-4bHI
  *
  * Citation: @article{zhao2024fmcw-lio,
- *               title={{FMCW-LIO: A Doppler LiDAR-Inertial Odometry}},
+ *               title={FMCW-LIO: A Doppler LiDAR-Inertial Odometry},
  *               author={Zhao, Mingle and Wang, Jiahao and Gao, Tianxiao and
  *                       Xu, Chengzhong and Kong, Hui},
  *               journal={IEEE Robotics and Automation Letters},
@@ -39,9 +39,9 @@
  *           }
  *
  *           @article{zhao2024free-init,
- *               title={{Free-Init: Scan-Free, Motion-Free, and
- *                       Correspondence-Free Initialization for
- *                       Doppler LiDAR-Inertial Systems}},
+ *               title={Free-Init: Scan-Free, Motion-Free, and
+ *                      Correspondence-Free Initialization for
+ *                      Doppler LiDAR-Inertial Systems},
  *               author={Zhao, Mingle and Wang, Jiahao and Gao, Tianxiao and
  *                       Xu, Chengzhong and Kong, Hui},
  *               journal={IEEE Robotics and Automation Letters},
@@ -84,10 +84,12 @@ public:
 
     // filter propagation
     void propagateFilter(const std::shared_ptr<StateBase>& state_ptr,
-                         const std::shared_ptr<MeasPackLI>& meas_ptr) {
+                         const std::shared_ptr<MeasPackLI>& meas_ptr,
+                         const std::shared_ptr<const BitHub>& bithub_ptr) {
         // state and covariance propagation via propagator
         propagator_ptr_->propagateStateAndCov(state_ptr, P_,
-                                              meas_ptr);
+                                              meas_ptr,
+                                              bithub_ptr);
     }
 
     // state update based on LiDAR velocity observation
@@ -109,12 +111,6 @@ public:
                                            scan_down_lidar_ptr, R_point,
                                            map_ptr, nearest_points,
                                            correspondence_thresh);
-    }
-
-    // set callback function for imu-rate state publish
-    void setTFPublishFunction(TFPublishFunction tf_publish_func) {
-        // function for publishing imu-rate state
-        propagator_ptr_->setTFPublishFunction(std::move(tf_publish_func));
     }
 
     // set covariance

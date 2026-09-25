@@ -19,15 +19,15 @@
  *
  * IEEE Xplore Link: https://ieeexplore.ieee.org/document/10518074
  *                   https://ieeexplore.ieee.org/document/10740796
- * arXiv Paper Link:
- *
- * Code & Sequence : https://github.com/IMRL/FMCW-LIO
+ * arXiv Paper Link: https://arxiv.org/abs/2609.29374
+ *                   https://arxiv.org/abs/2609.29375
+ * Code & Dataset  : https://github.com/IMRL/FMCW-LIO
  *                   https://github.com/IMRL/Free-Init
  * Experiment Video: https://youtu.be/2yuZYw91AP8
  *                   https://youtu.be/FbyzvJ-4bHI
  *
  * Citation: @article{zhao2024fmcw-lio,
- *               title={{FMCW-LIO: A Doppler LiDAR-Inertial Odometry}},
+ *               title={FMCW-LIO: A Doppler LiDAR-Inertial Odometry},
  *               author={Zhao, Mingle and Wang, Jiahao and Gao, Tianxiao and
  *                       Xu, Chengzhong and Kong, Hui},
  *               journal={IEEE Robotics and Automation Letters},
@@ -39,9 +39,9 @@
  *           }
  *
  *           @article{zhao2024free-init,
- *               title={{Free-Init: Scan-Free, Motion-Free, and
- *                       Correspondence-Free Initialization for
- *                       Doppler LiDAR-Inertial Systems}},
+ *               title={Free-Init: Scan-Free, Motion-Free, and
+ *                      Correspondence-Free Initialization for
+ *                      Doppler LiDAR-Inertial Systems},
  *               author={Zhao, Mingle and Wang, Jiahao and Gao, Tianxiao and
  *                       Xu, Chengzhong and Kong, Hui},
  *               journal={IEEE Robotics and Automation Letters},
@@ -53,7 +53,7 @@
  *           }
  ******************************************************************************/
 
-#include "bithub/bithub.hpp"
+#include "system/fmcw_lio.hpp"
 
 // main
 int main(int argc, char* argv[]) {
@@ -64,12 +64,8 @@ int main(int argc, char* argv[]) {
     // configuration pointer
     const auto config_ptr = std::make_shared<fmcw_lio::Config>(nh);
     // FMCW-LIO system pointer
-    const auto fmcw_lio_ptr = std::make_shared<fmcw_lio::FMCWLIO>(config_ptr);
-    fmcw_lio_ptr->setTFPublishFunction(&fmcw_lio::BitHub::publishTF);
-    // BitHub pointer
-    const auto bithub_ptr = std::make_shared<fmcw_lio::BitHub>(nh,
-                                                               config_ptr,
-                                                               fmcw_lio_ptr);
+    const auto fmcw_lio_ptr = std::make_shared<fmcw_lio::FMCWLIO>(nh,
+                                                                  config_ptr);
 
     ros::AsyncSpinner spinner(0);
     spinner.start();
@@ -77,17 +73,14 @@ int main(int argc, char* argv[]) {
 
     // FMCW-LIO evolves and publish data
     while (ros::ok()) {
-        if (bithub_ptr->packMeasLI()) {
-            fmcw_lio_ptr->evolveSystem(bithub_ptr->getMeasPackLI());
-            bithub_ptr->publishData();
-        }
+        fmcw_lio_ptr->evolveSystem();
 
         rate.sleep();
     }
 
     // dump map
     if (config_ptr->dump_map) {
-        bithub_ptr->dumpMap();
+        fmcw_lio_ptr->dumpMap();
     }
 
     ros::waitForShutdown();

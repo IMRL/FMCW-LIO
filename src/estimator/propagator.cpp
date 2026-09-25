@@ -19,15 +19,15 @@
  *
  * IEEE Xplore Link: https://ieeexplore.ieee.org/document/10518074
  *                   https://ieeexplore.ieee.org/document/10740796
- * arXiv Paper Link:
- *
- * Code & Sequence : https://github.com/IMRL/FMCW-LIO
+ * arXiv Paper Link: https://arxiv.org/abs/2609.29374
+ *                   https://arxiv.org/abs/2609.29375
+ * Code & Dataset  : https://github.com/IMRL/FMCW-LIO
  *                   https://github.com/IMRL/Free-Init
  * Experiment Video: https://youtu.be/2yuZYw91AP8
  *                   https://youtu.be/FbyzvJ-4bHI
  *
  * Citation: @article{zhao2024fmcw-lio,
- *               title={{FMCW-LIO: A Doppler LiDAR-Inertial Odometry}},
+ *               title={FMCW-LIO: A Doppler LiDAR-Inertial Odometry},
  *               author={Zhao, Mingle and Wang, Jiahao and Gao, Tianxiao and
  *                       Xu, Chengzhong and Kong, Hui},
  *               journal={IEEE Robotics and Automation Letters},
@@ -39,9 +39,9 @@
  *           }
  *
  *           @article{zhao2024free-init,
- *               title={{Free-Init: Scan-Free, Motion-Free, and
- *                       Correspondence-Free Initialization for
- *                       Doppler LiDAR-Inertial Systems}},
+ *               title={Free-Init: Scan-Free, Motion-Free, and
+ *                      Correspondence-Free Initialization for
+ *                      Doppler LiDAR-Inertial Systems},
  *               author={Zhao, Mingle and Wang, Jiahao and Gao, Tianxiao and
  *                       Xu, Chengzhong and Kong, Hui},
  *               journal={IEEE Robotics and Automation Letters},
@@ -124,7 +124,8 @@ void Propagator::initializePropagator(const std::shared_ptr<StateBase>& state_pt
 }
 
 void Propagator::propagateStateAndCov(const std::shared_ptr<StateBase>& state_ptr, Eigen::MatrixXd& P,
-                                      const std::shared_ptr<MeasPackLI>& meas_ptr) {
+                                      const std::shared_ptr<MeasPackLI>& meas_ptr,
+                                      const std::shared_ptr<const BitHub>& bithub_ptr) {
     // start timer
     std::chrono::steady_clock::time_point t1, t2;
     t1 = std::chrono::steady_clock::now();
@@ -220,7 +221,7 @@ void Propagator::propagateStateAndCov(const std::shared_ptr<StateBase>& state_pt
             omg_wb_b_meas_scan_end_ = omg_wb_b_tail;
             f_wb_b_meas_scan_end_ = f_wb_b_tail;
         } else if (config_ptr_->publish_tf_imu_rate) {
-            tf_publish_func_(state_ptr);
+            bithub_ptr->publishTF(state_ptr);
         }
 
         // update last IMU data
