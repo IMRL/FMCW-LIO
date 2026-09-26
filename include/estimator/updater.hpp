@@ -76,8 +76,6 @@ public:
         plane_search_time.resize(logger_size);
     }
 
-    ~LoggerUpdate() = default;
-
 public:
     double velocity_based_update_time;
     std::size_t actual_iterations;
@@ -91,8 +89,6 @@ public:
 class Updater {
 public:
     explicit Updater(const std::shared_ptr<const Config>& config_ptr);
-
-    ~Updater() = default;
 
     // LiDAR velocity observation: update state by LiDAR velocity
     void updateByVelocity(const std::shared_ptr<StateBase>& state_ptr, Eigen::MatrixXd& P,

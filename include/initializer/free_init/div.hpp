@@ -78,8 +78,6 @@ public:
     MeasDIV() : meas_type{},
                 timestamp{} {}
 
-    ~MeasDIV() = default;
-
 public:
     // measurement type
     MeasType meas_type;
@@ -115,8 +113,6 @@ public:
                       Eigen::Vector3d omg_wb_b = Eigen::Vector3d::Zero(),
                       Eigen::Vector3d v_wb_b = Eigen::Vector3d::Zero(),
                       Eigen::Vector3d bg_b = Eigen::Vector3d::Zero());
-
-    ~StateDIV() = default;
 
     // clone DIV state
     [[nodiscard]] std::shared_ptr<StateDIV> cloneStateDIV() const { return std::make_shared<StateDIV>(*this); }
@@ -186,8 +182,6 @@ public:
 
     explicit PropagatorDIV(const std::shared_ptr<const Config>& config_ptr);
 
-    ~PropagatorDIV() = default;
-
     // propagate state and covariance
     void propagateStateAndCov(const std::shared_ptr<StateDIV>& state_div_ptr, Eigen::MatrixXd& P,
                               const double dt) const {
@@ -223,8 +217,6 @@ class UpdaterDIV {
 public:
     explicit UpdaterDIV(const std::shared_ptr<const Config>& config_ptr);
     
-    ~UpdaterDIV() = default;
-
     // update state by angular rate
     void updateByAngularRate(const std::shared_ptr<StateDIV>& state_div_ptr, Eigen::MatrixXd& P,
                              const Eigen::Vector3d& angular_rate, const Eigen::Matrix3d& R);
@@ -245,8 +237,6 @@ public:
 
     explicit FilterDIV(const std::shared_ptr<const Config>& config_ptr) : propagator_div_ptr_(std::make_shared<PropagatorDIV>(config_ptr)),
                                                                           updater_div_ptr_(std::make_shared<UpdaterDIV>(config_ptr)) {}
-
-    ~FilterDIV() = default;
 
     // DIV filter propagation
     void propagateFilterDIV(const std::shared_ptr<StateDIV>& state_div_ptr,
@@ -294,8 +284,6 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     explicit DIV(const std::shared_ptr<const Config>& config_ptr);
-
-    ~DIV() = default;
 
     // DIV initialization: initialize DIV state and covariance
     void initializeDIV(double time,

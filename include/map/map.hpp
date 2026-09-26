@@ -66,8 +66,6 @@ class Map {
 public:
     explicit Map(const std::shared_ptr<const Config>& config_ptr);
 
-    ~Map() = default;
-
     // initialize map
     void initializeMap(const std::shared_ptr<StateBase>& state_ptr,
                        const PointCloudType::Ptr& scan_ptr,

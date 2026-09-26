@@ -67,14 +67,12 @@ public:
     using RGB = std::array<std::uint8_t, 3>;
 
     Neon(std::initializer_list<std::pair<std::string, RGB>> init) {
-        this->resetNeon(std::vector<std::pair<std::string, RGB>>(init));
+        resetNeon(std::vector<std::pair<std::string, RGB>>(init));
     }
 
     explicit Neon(std::vector<std::pair<std::string, RGB>> vec) {
-        this->resetNeon(std::move(vec));
+        resetNeon(std::move(vec));
     }
-
-    ~Neon() = default;
 
     // reset string to RGB vector
     void resetNeon(std::vector<std::pair<std::string, RGB>> vec) {
@@ -138,8 +136,8 @@ public:
     }
 
     // get RGB via a given string using index
-    std::optional<RGB> operator[](std::string const& key) const {
-        return this->getRGB(key);
+    [[nodiscard]] std::optional<RGB> operator[](std::string const& key) const {
+        return getRGB(key);
     }
 
 private:

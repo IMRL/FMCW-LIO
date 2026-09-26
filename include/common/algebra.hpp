@@ -82,8 +82,6 @@ public:
         }
     }
 
-    ~SO3() = default;
-
     // SO(3) static function
     // skewVec: R^3 -> so(3)
     static Eigen::Matrix3d skewVec(const Eigen::Vector3d& phi) {

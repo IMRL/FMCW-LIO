@@ -71,13 +71,11 @@ public:
     explicit FMCWLIO(ros::NodeHandle& nh,
                      const std::shared_ptr<Config>& config_ptr);
 
-    ~FMCWLIO() = default;
-
     // FMCW-LIO system evolution
     void evolveSystem();
 
-    // FMCW-LIO system iteration
-    void iterateSystem(const std::shared_ptr<MeasPackLI>& meas_ptr);
+    // FMCW-LIO algorithm framework evolution
+    void evolveFMCWLIO(const std::shared_ptr<MeasPackLI>& meas_ptr);
 
     // whether system is initialized
     [[nodiscard]] bool isInitialized() const noexcept { return is_init_success_; }

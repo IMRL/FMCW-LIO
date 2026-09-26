@@ -64,12 +64,7 @@ namespace fmcw_lio {
 // LoggerCompensation
 class LoggerCompensation {
 public:
-    LoggerCompensation() = default;
-
-    ~LoggerCompensation() = default;
-
-public:
-    double compensation_time;
+    double compensation_time{0.0};
 };
 
 // Compensator
@@ -77,8 +72,6 @@ class Compensator {
 public:
     explicit Compensator(const std::shared_ptr<const Config>& config_ptr,
                          IntegrateFunction compensate_func);
-
-    ~Compensator() = default;
 
     // compensate scan point cloud using extrinsic parameter and IMU data
     void compensateScan(const std::shared_ptr<StateBase>& state_ptr,

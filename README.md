@@ -134,11 +134,11 @@ $\color{#F1261D}{𝗙}\color{#FF9200}{𝗠}\color{#FDDB2A}{𝗖}\color{#4DE42B}{
     <tr>
       <td align="center" rowspan="3"><a href="https://github.com/IMRL/Free-Init"><strong>Free-Init Dataset</strong></a></td>
       <td align="center">Free-Init_handheld_campus</td>
-      <td align="center">aeva64_fmcw_lio_structured.launch</td>
+      <td align="center">aeva64_fmcw_lio_structured.launch<br><sub>(set <code>init_method: 3</code> in its YAML file)</sub></td>
     </tr>
     <tr>
       <td align="center">Free-Init_handheld_tunnel</td>
-      <td align="center">aeva64_fmcw_lio_tunnel.launch</td>
+      <td align="center">aeva64_fmcw_lio_tunnel.launch<br><sub>(set <code>init_method: 3</code> in its YAML file)</sub></td>
     </tr>
     <tr>
       <td align="center">Free-Init_vehicular_highway<br>Free-Init_vehicular_tunnel</td>

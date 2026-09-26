@@ -72,8 +72,6 @@ public:
                                                  offset_z_{0},
                                                  offset_intensity_{0} {}
 
-    ~LiDAR() = default;
-
     // set field data offset
     void setOffset(const std::vector<sensor_msgs::PointField>& fields) {
         // check get offset

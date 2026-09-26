@@ -65,7 +65,7 @@ StatePoseQuat::StatePoseQuat(double t,
                                                   rotation_quat_(q),
                                                   position_(std::move(p)) {
     // set state time
-    this->setTime(t);
+    setTime(t);
 }
 
 void StatePoseQuat::setState(const Eigen::Matrix3d& R,
@@ -75,8 +75,8 @@ void StatePoseQuat::setState(const Eigen::Matrix3d& R,
                              const Eigen::Vector3d& vec3_4,
                              const Eigen::Vector3d& vec3_5) {
     // set state
-    this->rotation_quat_ = Eigen::Quaterniond(R);
-    this->position_ = p;
+    rotation_quat_ = Eigen::Quaterniond(R);
+    position_ = p;
 }
 
 void StatePoseQuat::addDelVec(const Eigen::VectorXd& delta) {
@@ -104,7 +104,7 @@ StateKinematics::StateKinematics(double t,
                                                       linear_velocity_rate_(std::move(a_or_f)),
                                                       gravity_(std::move(g)) {
     // set state time
-    this->setTime(t);
+    setTime(t);
 }
 
 void StateKinematics::setState(const Eigen::Matrix3d& R,
@@ -114,12 +114,12 @@ void StateKinematics::setState(const Eigen::Matrix3d& R,
                                const Eigen::Vector3d& a_or_f,
                                const Eigen::Vector3d& g) {
     // set state
-    this->rotation_ = R;
-    this->velocity_ = v;
-    this->position_ = p;
-    this->angular_rotation_rate_ = omg;
-    this->linear_velocity_rate_ = a_or_f;
-    this->gravity_ = g;
+    rotation_ = R;
+    velocity_ = v;
+    position_ = p;
+    angular_rotation_rate_ = omg;
+    linear_velocity_rate_ = a_or_f;
+    gravity_ = g;
 }
 
 void StateKinematics::addDelVec(const Eigen::VectorXd& delta) {
@@ -147,20 +147,20 @@ StateSystem::StateSystem(const std::shared_ptr<const Config>& config_ptr) : Stat
                                                                             g_wb_w_(Eigen::Vector3d{0.0, 0.0, -config_ptr->gravity_scale}) {}
 
 StateSystem::StateSystem(double t,
-                         const SO3& R,
+                         SO3 R,
                          Eigen::Vector3d v,
                          Eigen::Vector3d p,
                          Eigen::Vector3d bg,
                          Eigen::Vector3d ba,
                          Eigen::Vector3d g) : StateBase(18),
-                                              R_wb_(R),
+                                              R_wb_(std::move(R)),
                                               v_wb_w_(std::move(v)),
                                               p_wb_w_(std::move(p)),
                                               bg_b_(std::move(bg)),
                                               ba_b_(std::move(ba)),
                                               g_wb_w_(std::move(g)) {
     // set state time
-    this->setTime(t);
+    setTime(t);
 }
 
 void StateSystem::setState(const Eigen::Matrix3d& R_wb,
@@ -170,12 +170,12 @@ void StateSystem::setState(const Eigen::Matrix3d& R_wb,
                            const Eigen::Vector3d& ba_b,
                            const Eigen::Vector3d& g_wb_w) {
     // set state
-    this->R_wb_ = SO3(R_wb);
-    this->v_wb_w_ = v_wb_w;
-    this->p_wb_w_ = p_wb_w;
-    this->bg_b_ = bg_b;
-    this->ba_b_ = ba_b;
-    this->g_wb_w_ = g_wb_w;
+    R_wb_ = SO3(R_wb);
+    v_wb_w_ = v_wb_w;
+    p_wb_w_ = p_wb_w;
+    bg_b_ = bg_b;
+    ba_b_ = ba_b;
+    g_wb_w_ = g_wb_w;
 }
 
 void StateSystem::addDelVec(const Eigen::VectorXd& delta) {
@@ -195,24 +195,24 @@ void StateSystem::addDelVec(const Eigen::VectorXd& delta) {
 }
 
 Eigen::VectorXd StateSystem::subState(const std::shared_ptr<StateBase>& state_ptr) const {
-    // downcast base class pointer to a shared pointer of derived class
-    const auto derived_state_ptr = std::dynamic_pointer_cast<StateSystem>(state_ptr);
+    // downcast to the derived state and throw std::bad_cast on type mismatch
+    const auto& other = dynamic_cast<const StateSystem&>(*state_ptr);
 
     // state difference
-    Eigen::VectorXd delta = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(this->getDim()));
+    Eigen::VectorXd delta = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(getDim()));
 
     // rotation
-    delta.segment<3>(0) = SO3::Log(derived_state_ptr->R_wb_.getInv() * this->R_wb_);
+    delta.segment<3>(0) = SO3::Log(other.R_wb_.getInv() * this->R_wb_);
     // velocity
-    delta.segment<3>(3) = this->v_wb_w_ - derived_state_ptr->v_wb_w_;
+    delta.segment<3>(3) = this->v_wb_w_ - other.v_wb_w_;
     // position
-    delta.segment<3>(6) = this->p_wb_w_ - derived_state_ptr->p_wb_w_;
+    delta.segment<3>(6) = this->p_wb_w_ - other.p_wb_w_;
     // gyroscope bias
-    delta.segment<3>(9) = this->bg_b_ - derived_state_ptr->bg_b_;
+    delta.segment<3>(9) = this->bg_b_ - other.bg_b_;
     // accelerometer bias
-    delta.segment<3>(12) = this->ba_b_ - derived_state_ptr->ba_b_;
+    delta.segment<3>(12) = this->ba_b_ - other.ba_b_;
     // gravity
-    delta.segment<3>(15) = this->g_wb_w_ - derived_state_ptr->g_wb_w_;
+    delta.segment<3>(15) = this->g_wb_w_ - other.g_wb_w_;
 
     return delta;
 }

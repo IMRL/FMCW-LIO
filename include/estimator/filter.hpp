@@ -70,8 +70,6 @@ public:
     explicit Filter(const std::shared_ptr<const Config>& config_ptr) : propagator_ptr_(std::make_shared<Propagator>(config_ptr)),
                                                                        updater_ptr_(std::make_shared<Updater>(config_ptr)) {}
 
-    ~Filter() = default;
-
     // initialize filter
     void initializeFilter(const std::shared_ptr<StateBase>& state_ptr, const Eigen::MatrixXd& P,
                           const std::shared_ptr<MeasPackLI>& meas_ptr) {

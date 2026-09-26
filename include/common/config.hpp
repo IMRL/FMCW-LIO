@@ -295,8 +295,6 @@ public:
         nh.param<double>("velocimeter/remove_dynamic_threshold", remove_dynamic_threshold, 1.0);
     }
 
-    ~Config() = default;
-
 public:
     // pose input and output
     bool dump_pose{};

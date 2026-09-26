@@ -70,7 +70,7 @@ StateDIV::StateDIV(StateType state_type,
                                            v_wb_b_(std::move(v_wb_b)),
                                            bg_b_(std::move(bg_b)) {
     // set state type and state dimension
-    this->setStateType(state_type);
+    setStateType(state_type);
 }
 
 void StateDIV::addDelVec(const Eigen::VectorXd& delta) {
@@ -78,24 +78,24 @@ void StateDIV::addDelVec(const Eigen::VectorXd& delta) {
     switch (state_type_) {
         case StateType::GyroBias: {
             // state order: bg_b
-            this->bg_b_ += delta.block<3, 1>(0, 0).eval();
+            bg_b_ += delta.block<3, 1>(0, 0).eval();
 
             break;
         }
 
         case StateType::AngVelBodyVel: {
             // state order: omg_wb_b, v_wb_b
-            this->omg_wb_b_ += delta.block<3, 1>(0, 0).eval();
-            this->v_wb_b_ += delta.block<3, 1>(3, 0).eval();
+            omg_wb_b_ += delta.block<3, 1>(0, 0).eval();
+            v_wb_b_ += delta.block<3, 1>(3, 0).eval();
 
             break;
         }
 
         case StateType::AngVelBodyVelGyroBias: {
             // state order:  omg_wb_b, v_wb_b, bg_b
-            this->omg_wb_b_ += delta.block<3, 1>(0, 0).eval();
-            this->v_wb_b_ += delta.block<3, 1>(3, 0).eval();
-            this->bg_b_ += delta.block<3, 1>(6, 0).eval();
+            omg_wb_b_ += delta.block<3, 1>(0, 0).eval();
+            v_wb_b_ += delta.block<3, 1>(3, 0).eval();
+            bg_b_ += delta.block<3, 1>(6, 0).eval();
 
             break;
         }
@@ -133,23 +133,23 @@ void StateDIV::setStateType(const StateDIV::StateType state_type) {
 
 void StateDIV::setState(const Eigen::Vector3d& bg_b) {
     // set state
-    this->bg_b_ = bg_b;
+    bg_b_ = bg_b;
 }
 
 void StateDIV::setState(const Eigen::Vector3d& omg_wb_b, 
                         const Eigen::Vector3d& v_wb_b) {
     // set state
-    this->omg_wb_b_ = omg_wb_b;
-    this->v_wb_b_ = v_wb_b;
+    omg_wb_b_ = omg_wb_b;
+    v_wb_b_ = v_wb_b;
 }
 
 void StateDIV::setState(const Eigen::Vector3d& omg_wb_b, 
                         const Eigen::Vector3d& v_wb_b, 
                         const Eigen::Vector3d& bg_b) {
     // set state
-    this->omg_wb_b_ = omg_wb_b;
-    this->v_wb_b_ = v_wb_b;
-    this->bg_b_ = bg_b;
+    omg_wb_b_ = omg_wb_b;
+    v_wb_b_ = v_wb_b;
+    bg_b_ = bg_b;
 }
 
 // PropagatorDIV

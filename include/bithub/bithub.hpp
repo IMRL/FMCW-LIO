@@ -76,8 +76,6 @@ class ConverterIMU {
 public:
     explicit ConverterIMU(const std::shared_ptr<const Config>& config_ptr);
 
-    ~ConverterIMU() = default;
-
     // convert IMU message
     void convertIMU(const sensor_msgs::Imu::ConstPtr& msg_ptr_in,
                     sensor_msgs::Imu::Ptr& msg_ptr_out) const;
@@ -91,8 +89,6 @@ private:
 class ConverterLiDAR {
 public:
     explicit ConverterLiDAR(const std::shared_ptr<const Config>& config_ptr);
-
-    ~ConverterLiDAR() = default;
 
     // convert LiDAR scan point cloud message
     void convertLiDAR(const MsgPtrVariant& msg_ptr_in,
@@ -115,8 +111,6 @@ public:
     explicit BitHub(ros::NodeHandle& nh,
                     const std::shared_ptr<const Config>& config_ptr,
                     const std::shared_ptr<const FMCWLIO>& fmcw_lio_ptr);
-
-    ~BitHub() = default;
 
     // IMU callback function
     void callIMU(const sensor_msgs::Imu::ConstPtr& msg_ptr_in);

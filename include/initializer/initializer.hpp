@@ -70,8 +70,6 @@ public:
                              initialization_time(0.0),
                              imu_number(0) {}
 
-    ~LoggerInitialization() = default;
-
 public:
     bool is_zero_velocity;
     double initialization_time;
@@ -86,8 +84,6 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     explicit StaticInit(const std::shared_ptr<const Config>& config_ptr);
-
-    ~StaticInit() = default;
 
     // initialize state, covariance, and map
     [[nodiscard]] std::size_t initializeStateCovMap(const std::shared_ptr<MeasPackLI>& meas_ptr);
@@ -148,8 +144,6 @@ private:
 class Initializer {
 public:
     explicit Initializer(const std::shared_ptr<const Config>& config_ptr);
-
-    ~Initializer() = default;
 
     // initialize system: system state, filter and covariance, and map
     [[nodiscard]] bool initializeSystem(const std::shared_ptr<StateBase>& state_ptr,

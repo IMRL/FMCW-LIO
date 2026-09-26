@@ -94,16 +94,17 @@ FMCWLIO::FMCWLIO(ros::NodeHandle& nh,
 }
 
 void FMCWLIO::evolveSystem() {
-    // FMCW-LIO system evolves via iteration over time
+    // FMCW-LIO system evolves over time
     if (bithub_ptr_->packMeasLI()) {
-        this->iterateSystem(bithub_ptr_->getMeasPackLI());
-
+        // FMCW-LIO framework evolves
+        evolveFMCWLIO(bithub_ptr_->getMeasPackLI());
+        // publish data
         bithub_ptr_->publishData();
     }
 }
 
-void FMCWLIO::iterateSystem(const std::shared_ptr<MeasPackLI>& meas_ptr) {
-    // FMCW-LIO system iterates
+void FMCWLIO::evolveFMCWLIO(const std::shared_ptr<MeasPackLI>& meas_ptr) {
+    // FMCW-LIO framework evolves over time
     if (is_first_scan_sys_) {
         initializer_ptr_->bootstrapFreeInit(meas_ptr);
         is_first_scan_sys_ = false;

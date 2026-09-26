@@ -67,11 +67,6 @@ class LoggerPropagation {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    LoggerPropagation() = default;
-
-    ~LoggerPropagation() = default;
-
-public:
     double propagation_time{};
     Eigen::VectorXd delta;
 };
@@ -82,8 +77,6 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     explicit Propagator(const std::shared_ptr<const Config>& config_ptr);
-
-    ~Propagator() = default;
 
     // initialize propagator
     void initializePropagator(const std::shared_ptr<StateBase>& state_ptr,

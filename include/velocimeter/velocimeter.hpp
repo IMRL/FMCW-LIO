@@ -70,8 +70,6 @@ public:
                           static_point_num(0),
                           dynamic_point_num(0) {}
 
-    ~LoggerVelocimetry() = default;
-
 public:
     bool success;
     double vel_est_time;
@@ -86,8 +84,6 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     explicit Velocimeter(const std::shared_ptr<const Config>& config_ptr);
-
-    ~Velocimeter() = default;
 
     // estimate LiDAR velocity in LiDAR frame
     bool estimateVelocity(const PointCloudType::Ptr& scan_ptr,

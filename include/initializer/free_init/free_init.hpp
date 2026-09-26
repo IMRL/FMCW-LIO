@@ -71,8 +71,6 @@ public:
 
     explicit FreeInit(const std::shared_ptr<const Config>& config_ptr);
 
-    ~FreeInit() = default;
-
     // bootstrap velocity with given measurement
     void bootstrapVelocity(const std::shared_ptr<MeasPackLI>& meas_ptr);
 

@@ -123,8 +123,6 @@ public:
                            const Eigen::Quaterniond& q = Eigen::Quaterniond::Identity(),
                            Eigen::Vector3d p = Eigen::Vector3d::Zero());
 
-    ~StatePoseQuat() override = default;
-
     // clone state
     [[nodiscard]] std::shared_ptr<StateBase> cloneState() const override { return std::make_shared<StatePoseQuat>(*this); }
 
@@ -184,8 +182,6 @@ public:
                              Eigen::Vector3d omg = Eigen::Vector3d::Zero(),
                              Eigen::Vector3d a_or_f = Eigen::Vector3d::Zero(),
                              Eigen::Vector3d g = Eigen::Vector3d{0.0, 0.0, -9.81});
-
-    ~StateKinematics() override = default;
 
     // clone state
     [[nodiscard]] std::shared_ptr<StateBase> cloneState() const override { return std::make_shared<StateKinematics>(*this); }
@@ -249,14 +245,12 @@ public:
     explicit StateSystem(const std::shared_ptr<const Config>& config_ptr);
 
     explicit StateSystem(double t = 0.0,
-                         const SO3& R = SO3(Eigen::Matrix3d::Identity()),
+                         SO3 R = SO3(Eigen::Matrix3d::Identity()),
                          Eigen::Vector3d v = Eigen::Vector3d::Zero(),
                          Eigen::Vector3d p = Eigen::Vector3d::Zero(),
                          Eigen::Vector3d bg = Eigen::Vector3d::Zero(),
                          Eigen::Vector3d ba = Eigen::Vector3d::Zero(),
                          Eigen::Vector3d g = Eigen::Vector3d{0.0, 0.0, -9.81});
-
-    ~StateSystem() override = default;
 
     // clone state
     [[nodiscard]] std::shared_ptr<StateBase> cloneState() const override { return std::make_shared<StateSystem>(*this); }

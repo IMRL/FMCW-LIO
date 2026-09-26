@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
     spinner.start();
     ros::Rate rate(5000);
 
-    // FMCW-LIO evolves and publish data
+    // FMCW-LIO system evolves
     while (ros::ok()) {
         fmcw_lio_ptr->evolveSystem();
 

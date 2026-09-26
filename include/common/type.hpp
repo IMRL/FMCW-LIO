@@ -194,10 +194,8 @@ public:
     explicit MeasPackLI() : scan_beg_time(0.0),
                             scan_end_time(0.0) {
         // reset scan pointer
-        this->scan_ptr.reset(new PointCloudType());
+        scan_ptr.reset(new PointCloudType());
     };
-
-    ~MeasPackLI() = default;
 
 public:
     // scan begin timestamp
