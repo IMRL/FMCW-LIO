@@ -134,7 +134,7 @@ void FMCWLIO::evolveFMCWLIO(const std::shared_ptr<MeasPackLI>& meas_ptr) {
 
         if (is_init_success_) {
             // switch point select interval between initialization and LIO phase
-            config_ptr_->point_select_interval = config_ptr_->point_select_interval_lio;
+            config_ptr_->point_select_interval.store(config_ptr_->point_select_interval_lio);
 
             // initialization mapping
             map_init_ptr_ = initializer_ptr_->getMap();
@@ -208,7 +208,7 @@ void FMCWLIO::evolveFMCWLIO(const std::shared_ptr<MeasPackLI>& meas_ptr) {
                                                  scan_static_lidar_ptr,
                                                  scan_dynamic_lidar_ptr_,
                                                  v_wl_l_updated);
-            *scan_down_lidar_ptr_ = *scan_static_lidar_ptr;
+            scan_down_lidar_ptr_->swap(*scan_static_lidar_ptr);
         }
     }
 
@@ -243,7 +243,7 @@ void FMCWLIO::evolveFMCWLIO(const std::shared_ptr<MeasPackLI>& meas_ptr) {
     time_processing_ = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count()) * 1.0e-3;
 }
 
-void FMCWLIO::dialForwardMeasLI(const std::shared_ptr<MeasPackLI>& meas_ptr) {
+void FMCWLIO::dialForwardMeasLI(const std::shared_ptr<MeasPackLI>& meas_ptr) const {
     // LiDAR scan
     auto it_first_point_keep = std::lower_bound(meas_ptr->scan_ptr->points.begin(), meas_ptr->scan_ptr->points.end(),
                                                 state_system_ptr_->getTime() - meas_ptr->scan_beg_time,

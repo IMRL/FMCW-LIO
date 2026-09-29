@@ -131,15 +131,14 @@ std::size_t Updater::updateByPlane(const std::shared_ptr<StateBase>& state_ptr, 
                                    const std::shared_ptr<Map>& map_ptr, PointVec2D& nearest_points,
                                    const std::size_t correspondence_thresh) {
     // valid point flag
-    const std::size_t size_flag = 100000;
-    std::array<bool, size_flag> valid_point_flags{{false}};
+    std::vector<std::uint8_t> valid_point_flags(scan_down_lidar_ptr->size(), 0);
 
-    // point cloud with valid point and corresponding local plane parameter
+    // local plane parameter point cloud and index of effective point
     auto point_down_size = scan_down_lidar_ptr->size();
     PointCloudType::Ptr plane_params_ptr(new PointCloudType());
-    PointCloudType::Ptr valid_points_ptr(new PointCloudType());
     plane_params_ptr->resize(point_down_size);
-    valid_points_ptr->resize(point_down_size);
+    // index of each effective point in downsampled scan
+    std::vector<std::size_t> effect_point_indices(point_down_size);
 
     // convergence flag
     bool is_convergence = true;
@@ -149,19 +148,15 @@ std::size_t Updater::updateByPlane(const std::shared_ptr<StateBase>& state_ptr, 
     const auto state_prop = state_ptr->cloneState();
     const auto dim_state = static_cast<Eigen::Index>(state_ptr->getDim());
 
+    // local plane parameter of each point
+    std::vector<Eigen::Vector4d, Eigen::aligned_allocator<Eigen::Vector4d>> local_plane_params(point_down_size);
     for (std::size_t i = 0; i <= config_ptr_->iteration_num; ++i) {
         // flag for iteration
         bool is_valid_iteration = true;
 
-        plane_params_ptr->clear();
-        valid_points_ptr->clear();
-
         // start timer
         std::chrono::steady_clock::time_point t1, t2, t3;
         t1 = std::chrono::steady_clock::now();
-
-        PointCloudType::Ptr valid_plane_params_ptr(new PointCloudType());
-        valid_plane_params_ptr->resize(point_down_size);
 
         // get current state estimate for transforming points
         auto R_wb = state_ptr->getRotation();
@@ -169,7 +164,7 @@ std::size_t Updater::updateByPlane(const std::shared_ptr<StateBase>& state_ptr, 
 
         // search nearest points in world frame and find plane
         std::vector<std::size_t> point_indices(point_down_size);
-        std::for_each(point_indices.begin(), point_indices.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+        std::iota(point_indices.begin(), point_indices.end(), std::size_t{0});
         std::for_each(std::execution::par,
                       point_indices.begin(), point_indices.end(),
                       [&](auto point_idx) -> void {
@@ -184,11 +179,16 @@ std::size_t Updater::updateByPlane(const std::shared_ptr<StateBase>& state_ptr, 
             point_world.z = static_cast<float>(p_wp_w(2));
             point_world.intensity = point_lidar.intensity;
 
-            // storing squared distance of point to nearest points
-            std::vector<float> nearest_points_sq_dist(config_ptr_->nearest_point_num);
             // vector in ascending order according to distance to point_world
             auto& points_near = nearest_points[point_idx];
             if (is_convergence) {
+                // clear nearest points of last scan for iVox
+                points_near.clear();
+
+                // storing squared distance of point to nearest points
+                thread_local std::vector<float> nearest_points_sq_dist;
+                nearest_points_sq_dist.assign(config_ptr_->nearest_point_num, 0.0f);
+
                 map_ptr->searchNearestPoints(point_world, config_ptr_->nearest_point_num,
                                              points_near, nearest_points_sq_dist);
                 // valid point if number of nearest points > threshold and largest distance < threshold
@@ -201,9 +201,10 @@ std::size_t Updater::updateByPlane(const std::shared_ptr<StateBase>& state_ptr, 
             }
             valid_point_flags[point_idx] = false;
 
-            // point-plane distance
-            Eigen::Vector4d plane_param;
-            if (estimatePlane(plane_param,
+            // point-plane distance (plane only depends on nearest points, so reuse it until nearest points are re-searched)
+            auto& plane_param = local_plane_params[point_idx];
+            if (!is_convergence ||
+                estimatePlane(plane_param,
                               points_near,
                               0.1)) {
                 // point-plane distance
@@ -229,8 +230,7 @@ std::size_t Updater::updateByPlane(const std::shared_ptr<StateBase>& state_ptr, 
         for (std::size_t point_idx = 0; point_idx < point_down_size; ++point_idx) {
             // valid points and corresponding plane parameters
             if (valid_point_flags[point_idx]) {
-                valid_points_ptr->points[effect_pts] = scan_down_lidar_ptr->points[point_idx];
-                valid_plane_params_ptr->points[effect_pts] = plane_params_ptr->points[point_idx];
+                effect_point_indices[effect_pts] = point_idx;
 
                 effect_pts += 1;
             }
@@ -256,17 +256,18 @@ std::size_t Updater::updateByPlane(const std::shared_ptr<StateBase>& state_ptr, 
         Eigen::MatrixXd H = Eigen::MatrixXd::Zero(static_cast<Eigen::Index>(effect_pts), dim_state);
 
         std::vector<std::size_t> valid_point_indices(effect_pts);
-        std::for_each(valid_point_indices.begin(), valid_point_indices.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+        std::iota(valid_point_indices.begin(), valid_point_indices.end(), std::size_t{0});
         std::for_each(std::execution::par,
                       valid_point_indices.begin(), valid_point_indices.end(),
                       [&](auto valid_point_idx) -> void {
-            Eigen::Vector3d p_lp_l(valid_points_ptr->points[valid_point_idx].x,
-                                   valid_points_ptr->points[valid_point_idx].y,
-                                   valid_points_ptr->points[valid_point_idx].z);
+            const auto& valid_point = scan_down_lidar_ptr->points[effect_point_indices[valid_point_idx]];
+            Eigen::Vector3d p_lp_l(valid_point.x,
+                                   valid_point.y,
+                                   valid_point.z);
             Eigen::Vector3d p_bp_b = config_ptr_->R_bl * p_lp_l + config_ptr_->p_bl_b;
             Eigen::Matrix3d p_bp_b_times = SO3::skewVec(p_bp_b);
 
-            auto& plane_param = valid_plane_params_ptr->points[valid_point_idx];
+            const auto& plane_param = plane_params_ptr->points[effect_point_indices[valid_point_idx]];
             Eigen::Vector3d normal(plane_param.x, plane_param.y, plane_param.z);
 
             // Jacobian matrix
@@ -290,7 +291,7 @@ std::size_t Updater::updateByPlane(const std::shared_ptr<StateBase>& state_ptr, 
 
         // matrix dimension reduction via QR decomposition with orthogonal triangularization
         auto applyOrthogonalTriangularization =
-                [](auto& A, auto& b, bool use_col_pivoting = true) -> void {
+                [](auto& A, auto& b, bool use_col_pivoting = true, Eigen::Index nonzero_col_dim = -1) -> void {
             // decayed scalar type
             using Scalar = typename std::decay_t<decltype(A)>::Scalar;
 
@@ -309,26 +310,28 @@ std::size_t Updater::updateByPlane(const std::shared_ptr<StateBase>& state_ptr, 
 
             const std::size_t dim = col_dim;
             if (use_col_pivoting) {
-                // perform QR decomposition with column pivoting: A * P = Q * R
-                Eigen::ColPivHouseholderQR<Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>> qr(A);
+                // decompose leading columns only
+                const Eigen::Index qr_dim = ((nonzero_col_dim < 0) ? A.cols() : nonzero_col_dim);
+                auto A_qr = A.leftCols(qr_dim);
+
+                // perform in-place QR decomposition with column pivoting: A * P = Q * R
+                Eigen::ColPivHouseholderQR<Eigen::Ref<Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>>> qr(A_qr);
                 // get column permutation matrix
                 const auto& P = qr.colsPermutation();
-                // extract full upper triangular matrix R from QR decomposition
-                const auto& R_full = qr.matrixQR().template triangularView<Eigen::Upper>().toDenseMatrix();
-                // take top-left col_dim x col_dim block of R
-                Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> R_n = R_full.topRows(dim).leftCols(dim);
+                // take top-left qr_dim x qr_dim upper triangular block of R
+                Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> R_n = qr.matrixQR().topLeftCorner(qr_dim, qr_dim).template triangularView<Eigen::Upper>();
                 // compute y = Q^{\top} * b, then take top col_dim rows as reduced right-hand side
                 Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> y = (qr.householderQ().adjoint() * b).topRows(dim);
 
-                A = std::move(R_n * P.transpose());
+                // col_dim x col_dim reduced A
+                A.setZero(dim, dim);
+                A.topLeftCorner(qr_dim, qr_dim) = R_n * P.transpose();
                 b = std::move(y);
             } else {
-                // perform standard QR decomposition without pivoting: A = Q * R
-                Eigen::HouseholderQR<Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>> qr(A);
-                // extract full upper triangular matrix R
-                const auto R_full = qr.matrixQR().template triangularView<Eigen::Upper>().toDenseMatrix();
-                // take top-left col_dim x col_dim block of R
-                Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> R_n = R_full.topRows(dim).leftCols(dim);
+                // perform in-place standard QR decomposition without pivoting: A = Q * R
+                Eigen::HouseholderQR<Eigen::Ref<Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>>> qr(A);
+                // take top-left col_dim x col_dim upper triangular block of R
+                Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> R_n = qr.matrixQR().topLeftCorner(dim, dim).template triangularView<Eigen::Upper>();
                 // compute y = Q^{\top} * b, then take top col_dim rows
                 Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> y = (qr.householderQ().adjoint() * b).topRows(dim);
 
@@ -338,9 +341,8 @@ std::size_t Updater::updateByPlane(const std::shared_ptr<StateBase>& state_ptr, 
         };
 
         // observation matrix decomposition
-        applyOrthogonalTriangularization(H, r);
-        Eigen::MatrixXd R_p = R_point * Eigen::MatrixXd::Identity(static_cast<Eigen::Index>(H.rows()),
-                                                                  static_cast<Eigen::Index>(H.rows()));
+        applyOrthogonalTriangularization(H, r, true, 9);
+        Eigen::MatrixXd R_p = R_point * Eigen::MatrixXd::Identity(H.rows(), H.rows());
 
         // error state update
         Eigen::VectorXd delta_x_pre = state_ptr->subState(state_prop);
@@ -413,22 +415,27 @@ std::size_t Updater::updateByPlane(const std::shared_ptr<StateBase>& state_ptr, 
             return effect_pts;
         }
     }
+
+    return 0;
 }
 
 bool Updater::estimatePlane(Eigen::Vector4d& plane_param,
                             const PointVec1D& points_near,
                             const double threshold) const {
-    // estimate plane parameter
-    Eigen::MatrixXd A = Eigen::MatrixXd::Zero(static_cast<Eigen::Index>(config_ptr_->nearest_point_num), 3);
-    Eigen::VectorXd b = -Eigen::VectorXd::Ones(static_cast<Eigen::Index>(config_ptr_->nearest_point_num));
+    // estimate plane parameter (thread-local workspace reused across calls to avoid heap allocation)
+    thread_local Eigen::MatrixXd A;
+    thread_local Eigen::VectorXd b;
+    thread_local Eigen::ColPivHouseholderQR<Eigen::MatrixXd> qr;
+    A.resize(static_cast<Eigen::Index>(config_ptr_->nearest_point_num), 3);
+    b.setConstant(static_cast<Eigen::Index>(config_ptr_->nearest_point_num), -1.0);
 
-    for (int j = 0; j < config_ptr_->nearest_point_num; ++j) {
+    for (Eigen::Index j = 0; j < config_ptr_->nearest_point_num; ++j) {
         A(j, 0) = points_near[j].x;
         A(j, 1) = points_near[j].y;
         A(j, 2) = points_near[j].z;
     }
 
-    Eigen::Vector3d norm_vec = A.colPivHouseholderQr().solve(b);
+    Eigen::Vector3d norm_vec = qr.compute(A).solve(b);
 
     double n = norm_vec.norm();
     plane_param(0) = norm_vec(0) / n;
@@ -436,7 +443,7 @@ bool Updater::estimatePlane(Eigen::Vector4d& plane_param,
     plane_param(2) = norm_vec(2) / n;
     plane_param(3) = 1.0 / n;
 
-    for (int j = 0; j < config_ptr_->nearest_point_num; ++j) {
+    for (std::size_t j = 0; j < config_ptr_->nearest_point_num; ++j) {
         if (std::fabs(plane_param(0) * points_near[j].x +
                       plane_param(1) * points_near[j].y +
                       plane_param(2) * points_near[j].z +

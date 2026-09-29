@@ -82,7 +82,7 @@ public:
             item.reset();
         }
 
-        for (auto& item : str_rgb_vec_) {
+        for (const auto& item : str_rgb_vec_) {
             const std::string& key = item.first;
             if (key.size() != 1) {
                 continue;
@@ -98,7 +98,7 @@ public:
         std::string str;
         str.reserve(str_rgb_vec_.size());
 
-        for (auto const& item : str_rgb_vec_) {
+        for (const auto& item : str_rgb_vec_) {
             if (!item.first.empty()) {
                 str += item.first;
             }
@@ -112,7 +112,7 @@ public:
         std::vector<RGB> rgb_vec;
         rgb_vec.reserve(str_rgb_vec_.size());
 
-        for (auto const& item : str_rgb_vec_) {
+        for (const auto& item : str_rgb_vec_) {
             rgb_vec.push_back(item.second);
         }
 
@@ -120,12 +120,12 @@ public:
     }
 
     // get string to RGB vector
-    [[nodiscard]] std::vector<std::pair<std::string, RGB>> const& getStringRGBVec() const noexcept {
+    [[nodiscard]] const std::vector<std::pair<std::string, RGB>>& getStringRGBVec() const noexcept {
         return str_rgb_vec_;
     }
 
     // get RGB via a given string
-    [[nodiscard]] std::optional<RGB> getRGB(std::string const& key) const {
+    [[nodiscard]] std::optional<RGB> getRGB(const std::string& key) const {
         if (key.size() != 1) {
             return std::nullopt;
         }
@@ -136,7 +136,7 @@ public:
     }
 
     // get RGB via a given string using index
-    [[nodiscard]] std::optional<RGB> operator[](std::string const& key) const {
+    [[nodiscard]] std::optional<RGB> operator[](const std::string& key) const {
         return getRGB(key);
     }
 

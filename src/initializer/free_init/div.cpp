@@ -175,7 +175,7 @@ void PropagatorDIV::propagateNominalState(const std::shared_ptr<StateDIV>& state
         case StateDIV::StateType::AngVelBodyVelGyroBias:
         case StateDIV::StateType::GyroBias: {
             const auto bg_b = state_div_ptr->getGyroscopeBias();
-            const auto idx_bg = static_cast<Eigen::Index>(dim_mat - bg_b.rows());
+            const auto idx_bg = dim_mat - bg_b.rows();
 
             // 1-st order Gauss-Markov process
             const auto delta_bg = ((-dt * config_ptr_->imu_correlation_time_inv) * bg_b).eval();
@@ -216,11 +216,11 @@ void PropagatorDIV::propagateCovariance(const std::shared_ptr<StateDIV>& state_d
         case StateDIV::StateType::GyroBias: {
             // 1-st order Gauss-Markov process
             const auto block_bg = ((1.0 - (dt * config_ptr_->imu_correlation_time_inv)) * Eigen::Matrix3d::Identity()).eval();
-            const auto dim_bg = static_cast<Eigen::Index>(block_bg.rows());
+            const auto dim_bg = block_bg.rows();
 
             F_x.block(dim_mat - dim_bg, dim_mat - dim_bg, dim_bg, dim_bg) = block_bg;
 
-            const auto dim_Q = static_cast<Eigen::Index>(Q_.rows());
+            const auto dim_Q = Q_.rows();
             Q = Q_.block(dim_Q - dim_mat, dim_Q - dim_mat, dim_mat, dim_mat).eval();
 
             break;
@@ -234,7 +234,7 @@ void PropagatorDIV::propagateCovariance(const std::shared_ptr<StateDIV>& state_d
 UpdaterDIV::UpdaterDIV(const std::shared_ptr<const Config>& config_ptr) : config_ptr_(config_ptr) {}
 
 void UpdaterDIV::updateByAngularRate(const std::shared_ptr<StateDIV>& state_div_ptr, Eigen::MatrixXd& P,
-                                     const Eigen::Vector3d& angular_rate, const Eigen::Matrix3d& R) {
+                                     const Eigen::Vector3d& angular_rate, const Eigen::Matrix3d& R) const {
     // state type and state dimension
     const auto state_type = state_div_ptr->getStateType();
     const auto dim_state = state_div_ptr->getDim();
@@ -277,7 +277,7 @@ void UpdaterDIV::updateByAngularRate(const std::shared_ptr<StateDIV>& state_div_
 }
 
 void UpdaterDIV::updateByDoppler(const std::shared_ptr<StateDIV>& state_div_ptr, Eigen::MatrixXd& P,
-                                 const PointType& point, const double R) {
+                                 const PointType& point, const double R) const {
     // state dimension
     const auto dim_state = state_div_ptr->getDim();
     // angular velocity and body velocity
@@ -546,7 +546,7 @@ void DIV::updateAndintegrateAndmappingByDoppler(const std::shared_ptr<MeasDIV> &
     }
 }
 
-bool DIV::isDynamicPoint(const PointType& point) {
+bool DIV::isDynamicPoint(const PointType& point) const {
     // point direction unit vector
     Eigen::Vector3d d_lp_l = Eigen::Vector3d(point.x, point.y, point.z).normalized();
 
@@ -572,9 +572,9 @@ bool DIV::isDynamicPoint(const PointType& point) {
     }
 }
 
-Eigen::VectorXd DIV::integratePose(const Eigen::Vector3d& omg_wb_b_head, const Eigen::Vector3d& v_wb_b_head,
-                                   const Eigen::Vector3d& omg_wb_b_tail, const Eigen::Vector3d& v_wb_b_tail,
-                                   const double dt) {
+Eigen::Matrix<double, 6, 1> DIV::integratePose(const Eigen::Vector3d& omg_wb_b_head, const Eigen::Vector3d& v_wb_b_head,
+                                               const Eigen::Vector3d& omg_wb_b_tail, const Eigen::Vector3d& v_wb_b_tail,
+                                               const double dt) {
     // integrate pose on SE(3)
     // average angular velocity
     Eigen::Vector3d omg_wb_b_avg = 0.5 * (omg_wb_b_head + omg_wb_b_tail);
@@ -585,7 +585,7 @@ Eigen::VectorXd DIV::integratePose(const Eigen::Vector3d& omg_wb_b_head, const E
     Eigen::Vector3d dtheta = omg_wb_b_avg * dt;
 
     // DIV integration increment
-    Eigen::VectorXd delta = Eigen::VectorXd::Zero(6);
+    Eigen::Matrix<double, 6, 1> delta = Eigen::Matrix<double, 6, 1>::Zero();
     delta.block<3, 1>(0, 0) = dtheta;
     delta.block<3, 1>(3, 0) = SO3::Jl(dtheta) * v_wb_b_avg * dt;
 
@@ -645,7 +645,7 @@ void DIV::enableIntegration(const std::shared_ptr<MeasDIV>& meas_div_ptr) {
     }
 }
 
-bool DIV::detectZeroVelocity() {
+bool DIV::detectZeroVelocity() const {
     // detect zero velocity via angular velocity and body velocity estimate
     return ((state_div_ptr_->getBodyVelocity().norm() <= config_ptr_->zero_velocity_thresh_init) &&
             (state_div_ptr_->getAngularVelocity().norm() <= config_ptr_->zero_angular_velocity_thresh_init));

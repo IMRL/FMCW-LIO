@@ -76,7 +76,9 @@ public:
 
 public:
     MeasDIV() : meas_type{},
-                timestamp{} {}
+                timestamp{},
+                angular_rate(Eigen::Vector3d::Zero()),
+                specific_force(Eigen::Vector3d::Zero()) {}
 
 public:
     // measurement type
@@ -219,11 +221,11 @@ public:
     
     // update state by angular rate
     void updateByAngularRate(const std::shared_ptr<StateDIV>& state_div_ptr, Eigen::MatrixXd& P,
-                             const Eigen::Vector3d& angular_rate, const Eigen::Matrix3d& R);
+                             const Eigen::Vector3d& angular_rate, const Eigen::Matrix3d& R) const;
 
     // update state by Doppler velocity
     void updateByDoppler(const std::shared_ptr<StateDIV>& state_div_ptr, Eigen::MatrixXd& P,
-                         const PointType& point, double R);
+                         const PointType& point, double R) const;
 
 private:
     // configuration pointer
@@ -266,7 +268,7 @@ public:
     void setCovariance(const Eigen::MatrixXd& P) { P_ = P; }
 
     // get covariance
-    [[nodiscard]] Eigen::MatrixXd getCovariance() const noexcept { return P_; }
+    [[nodiscard]] const Eigen::MatrixXd& getCovariance() const noexcept { return P_; }
 
 private:
     // propagator pointer
@@ -346,18 +348,18 @@ private:
     void updateAndintegrateAndmappingByDoppler(const std::shared_ptr<MeasDIV>& meas_div_ptr);
 
     // dynamic point detection
-    bool isDynamicPoint(const PointType& point);
+    [[nodiscard]] bool isDynamicPoint(const PointType& point) const;
 
     // integrate pose on SE(3)
-    static Eigen::VectorXd integratePose(const Eigen::Vector3d& omg_wb_b_head, const Eigen::Vector3d& v_wb_b_head,
-                                         const Eigen::Vector3d& omg_wb_b_tail, const Eigen::Vector3d& v_wb_b_tail,
-                                         double dt);
+    static Eigen::Matrix<double, 6, 1> integratePose(const Eigen::Vector3d& omg_wb_b_head, const Eigen::Vector3d& v_wb_b_head,
+                                                     const Eigen::Vector3d& omg_wb_b_tail, const Eigen::Vector3d& v_wb_b_tail,
+                                                     double dt);
 
     // enable DIV integration
     void enableIntegration(const std::shared_ptr<MeasDIV>& meas_div_ptr);
 
     // detect zero velocity
-    bool detectZeroVelocity();
+    [[nodiscard]] bool detectZeroVelocity() const;
 
     // add static point to map
     void addMapPoint(const Eigen::Matrix3d& R_wb, const Eigen::Vector3d& p_wb_w,

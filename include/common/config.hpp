@@ -66,7 +66,7 @@ class Config {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    explicit Config(ros::NodeHandle& nh) {
+    explicit Config(const ros::NodeHandle& nh) {
         // load configuration
         // pose input and output
         nh.param<bool>("pose_io/dump", dump_pose, false);
@@ -235,7 +235,7 @@ public:
         nh.param<double>("mapping/ivox_resolution", ivox_resolution, 0.5);
         // { CENTER = 1, NEARBY6 = 2, NEARBY18 = 3, NEARBY26 = 4 }
         int ivox_nearby_type_temp;
-        nh.param<int>("mapping/nearby_type", ivox_nearby_type_temp, 2);
+        nh.param<int>("mapping/ivox_nearby_type", ivox_nearby_type_temp, 2);
         ivox_nearby_type = static_cast<IVoxType::NearbyType>(ivox_nearby_type_temp);
 
         // publishing
@@ -330,7 +330,7 @@ public:
     double skip_radius{};
     double skip_radius_squared{};
     std::size_t point_select_interval_lio{};
-    std::size_t point_select_interval{};
+    std::atomic<std::size_t> point_select_interval{};
     // is the scan message timestamp the scan end timestamp
     bool scan_end_timestamp{};
 

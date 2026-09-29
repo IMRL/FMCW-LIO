@@ -75,10 +75,7 @@ void Compensator::compensateScan(const std::shared_ptr<StateBase>& state_ptr,
     // compare state time lambda
     auto compareStateTime = [](const std::shared_ptr<const StateBase>& propagation_state_ptr,
                                const double t) -> bool {
-        // convert state pointer
-        auto prop_state_ptr = std::dynamic_pointer_cast<const StateKinematics>(propagation_state_ptr);
-
-        return (prop_state_ptr->getTime() <= t);
+        return (propagation_state_ptr->getTime() <= t);
     };
 
     if (scan_compensated_ptr->points.empty() ||
@@ -95,63 +92,103 @@ void Compensator::compensateScan(const std::shared_ptr<StateBase>& state_ptr,
     auto prop_state_end_ptr = std::dynamic_pointer_cast<const StateKinematics>(propagation_states_ptr->back());
     auto omg_scan_end_time = prop_state_end_ptr->getAngRotRate();
 
+    // LiDAR velocity w.r.t. world frame in world frame at scan end time
+    Eigen::Vector3d v_wl_w_k = v_wb_w_k + (R_wb_k * omg_scan_end_time.cross(config_ptr_->p_bl_b));
+    // LiDAR position w.r.t. world frame in world frame at scan end time
+    Eigen::Vector3d p_wl_w_k = p_wb_w_k + (R_wb_k * config_ptr_->p_bl_b);
+
     // point time at scan end time
     auto point_time_scan_end = scan_compensated_ptr->points.back().curvature;
 
+    // kinematics states for motion compensation
+    std::vector<std::shared_ptr<const StateKinematics>> prop_kin_states;
+    prop_kin_states.reserve(propagation_states_ptr->size());
+    for (const auto& propagation_state_ptr : *propagation_states_ptr) {
+        prop_kin_states.push_back(std::dynamic_pointer_cast<const StateKinematics>(propagation_state_ptr));
+    }
+
+    // unique id of current compensation for thread-local cache of integrated state
+    static std::atomic<std::uint64_t> compensation_count{0};
+    const std::uint64_t compensation_id = ++compensation_count;
+
     // compensation via propagation
     std::vector<std::size_t> point_indices(scan_compensated_ptr->points.size());
-    std::for_each(point_indices.begin(), point_indices.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+    std::iota(point_indices.begin(), point_indices.end(), std::size_t{0});
     std::for_each(std::execution::par,
                   point_indices.begin(), point_indices.end(),
                   [&](std::size_t idx) -> void {
-        // kinematics state for motion compensation
-        std::shared_ptr<const StateKinematics> prop_state_head;
-        std::shared_ptr<const StateKinematics> prop_state_tail;
-
-        // search head and tail propagation state for point
         auto& point = scan_compensated_ptr->points[idx];
-        float point_time = point.curvature * 1.0e-3f;
-        const auto it = std::lower_bound(propagation_states_ptr->begin(), propagation_states_ptr->end(),
-                                         point_time,
-                                         compareStateTime);
-        if (it == propagation_states_ptr->end()) {
-            prop_state_head = std::dynamic_pointer_cast<const StateKinematics>(*(it - 2));
-            prop_state_tail = std::dynamic_pointer_cast<const StateKinematics>(*(it - 1));
-        } else {
-            prop_state_head = std::dynamic_pointer_cast<const StateKinematics>(*(it - 1));
-            prop_state_tail = std::dynamic_pointer_cast<const StateKinematics>(*it);
+
+        // integrated state at point sampling time
+        thread_local std::uint64_t cached_compensation_id = 0;
+        thread_local float cached_point_curvature = 0.0f;
+        thread_local Eigen::Matrix3d R_wb_i, R_wl_i;
+        thread_local Eigen::Vector3d v_wb_w_i, p_wb_w_i, v_wl_w_i, p_wl_w_i;
+        if ((cached_compensation_id != compensation_id) ||
+            !((cached_point_curvature == point.curvature) &&
+            (std::signbit(cached_point_curvature) == std::signbit(point.curvature)))) {
+            // search head and tail propagation state for point
+            float point_time = point.curvature * 1.0e-3f;
+            const auto it = std::lower_bound(propagation_states_ptr->begin(), propagation_states_ptr->end(),
+                                             point_time,
+                                             compareStateTime);
+            auto tail_idx = static_cast<std::size_t>(it - propagation_states_ptr->begin());
+            if (it == propagation_states_ptr->end()) {
+                tail_idx -= 1;
+            } else if (tail_idx == 0) {
+                // point is slightly earlier than first propagation state
+                tail_idx = 1;
+            }
+
+            // kinematics state for motion compensation
+            const auto& prop_state_head = prop_kin_states[tail_idx - 1];
+            const auto& prop_state_tail = prop_kin_states[tail_idx];
+
+            // unbiased angular rate and specific force of head and tail propagated state
+            Eigen::Vector3d omg_wb_b_head = prop_state_head->getAngRotRate();
+            Eigen::Vector3d f_wb_b_head = prop_state_head->getLinVelRate();
+
+            Eigen::Vector3d omg_wb_b_tail = prop_state_tail->getAngRotRate();
+            Eigen::Vector3d f_wb_b_tail = prop_state_tail->getLinVelRate();
+
+            // time duration between two adjacent propagation states
+            double dt_prop = prop_state_tail->getTime() - prop_state_head->getTime();
+            // time duration from head propagation state
+            double dt_i = point_time - prop_state_head->getTime();
+
+            // weight unbiased angular rate and specific force at point sampling time
+            Eigen::Vector3d omg_wb_b_i, f_wb_b_i;
+            std::tie(omg_wb_b_i, f_wb_b_i) = weightIMUMeas(omg_wb_b_head, f_wb_b_head,
+                                                           omg_wb_b_tail, f_wb_b_tail,
+                                                           dt_prop,
+                                                           dt_i);
+
+            // integrate state to point sampling time
+            thread_local Eigen::VectorXd delta;
+            StateKinematics state_i(*prop_state_head);
+            integrate_func_((*propagation_states_ptr)[tail_idx - 1],
+                            omg_wb_b_head, f_wb_b_head,
+                            omg_wb_b_i, f_wb_b_i,
+                            dt_i,
+                            delta);
+            state_i.addDelVec(delta);
+            // rotation, velocity, position at point sampling time
+            R_wb_i = state_i.getRotation();
+            v_wb_w_i = state_i.getVelocity();
+            p_wb_w_i = state_i.getPosition();
+
+            if (config_ptr_->use_doppler) {
+                // LiDAR rotation w.r.t. world frame at point sampling time
+                R_wl_i = R_wb_i * config_ptr_->R_bl;
+                // LiDAR velocity w.r.t. world frame in world frame at point sampling time
+                v_wl_w_i = v_wb_w_i + (R_wb_i * omg_wb_b_i.cross(config_ptr_->p_bl_b));
+                // LiDAR position w.r.t. world frame in world frame at point sampling time
+                p_wl_w_i = p_wb_w_i + (R_wb_i * config_ptr_->p_bl_b);
+            }
+
+            cached_compensation_id = compensation_id;
+            cached_point_curvature = point.curvature;
         }
-
-        // unbiased angular rate and specific force of head and tail propagated state
-        Eigen::Vector3d omg_wb_b_head = prop_state_head->getAngRotRate();
-        Eigen::Vector3d f_wb_b_head = prop_state_head->getLinVelRate();
-
-        Eigen::Vector3d omg_wb_b_tail = prop_state_tail->getAngRotRate();
-        Eigen::Vector3d f_wb_b_tail = prop_state_tail->getLinVelRate();
-
-        // time duration between two adjacent propagation states
-        double dt_prop = prop_state_tail->getTime() - prop_state_head->getTime();
-        // time duration from head propagation state
-        double dt_i = point_time - prop_state_head->getTime();
-
-        // weight unbiased angular rate and specific force at point sampling time
-        Eigen::Vector3d omg_wb_b_i, f_wb_b_i;
-        std::tie(omg_wb_b_i, f_wb_b_i) = weightIMUMeas(omg_wb_b_head, f_wb_b_head,
-                                                       omg_wb_b_tail, f_wb_b_tail,
-                                                       dt_prop,
-                                                       dt_i);
-
-        // integrate state to point sampling time
-        auto head_clone = prop_state_head->cloneState();
-        auto delta = integrate_func_(head_clone,
-                                     omg_wb_b_head, f_wb_b_head,
-                                     omg_wb_b_i, f_wb_b_i,
-                                     dt_i);
-        head_clone->addDelVec(delta);
-        // rotation, velocity, position at point sampling time
-        auto R_wb_i = head_clone->getRotation();
-        auto v_wb_w_i = head_clone->getVelocity();
-        auto p_wb_w_i = head_clone->getPosition();
 
         // point in LiDAR frame at sampling time
         Eigen::Vector3d p_lp_l_i{point.x, point.y, point.z};
@@ -170,15 +207,7 @@ void Compensator::compensateScan(const std::shared_ptr<StateBase>& state_ptr,
         // Doppler velocity compensation
         if (config_ptr_->use_doppler) {
             // point position w.r.t. LiDAR frame in world frame
-            Eigen::Vector3d p_lp_w_i = R_wb_i * config_ptr_->R_bl * p_lp_l_i;
-            // LiDAR velocity w.r.t. world frame in world frame at scan end time
-            Eigen::Vector3d v_wl_w_k = v_wb_w_k + (R_wb_k * omg_scan_end_time.cross(config_ptr_->p_bl_b));
-            // LiDAR velocity w.r.t. world frame in world frame at point sampling time
-            Eigen::Vector3d v_wl_w_i = v_wb_w_i + (R_wb_i * omg_wb_b_i.cross(config_ptr_->p_bl_b));
-            // LiDAR position w.r.t. world frame in world frame at point sampling time
-            Eigen::Vector3d p_wl_w_i = p_wb_w_i + (R_wb_i * config_ptr_->p_bl_b);
-            // LiDAR position w.r.t. world frame in world frame at scan end time
-            Eigen::Vector3d p_wl_w_k = p_wb_w_k + (R_wb_k * config_ptr_->p_bl_b);
+            Eigen::Vector3d p_lp_w_i = R_wl_i * p_lp_l_i;
 
             // point Doppler velocity at point sampling time
             double v_d_i = point.intensity;

@@ -22,11 +22,11 @@ find_package(catkin REQUIRED COMPONENTS
     sensor_msgs
     std_msgs
     pcl_ros
+    pcl_conversions
     tf
     roscpp
-    rospy
-    message_generation
-    eigen_conversions
+    angles
+    topic_tools
     livox_ros_driver
 )
 find_package(Eigen3 REQUIRED)
@@ -46,7 +46,7 @@ list(REMOVE_ITEM FMCW_LIO_SRCS ${FREE_INIT_SRCS})
 
 catkin_package(
     INCLUDE_DIRS include
-    CATKIN_DEPENDS geometry_msgs nav_msgs roscpp rospy std_msgs message_runtime
+    CATKIN_DEPENDS geometry_msgs nav_msgs roscpp std_msgs
     DEPENDS Eigen3 PCL
 )
 

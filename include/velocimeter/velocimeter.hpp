@@ -86,9 +86,9 @@ public:
     explicit Velocimeter(const std::shared_ptr<const Config>& config_ptr);
 
     // estimate LiDAR velocity in LiDAR frame
-    bool estimateVelocity(const PointCloudType::Ptr& scan_ptr,
-                          const Eigen::Vector3d& v_wl_l = Eigen::Vector3d::Zero(),
-                          bool use_ransac = false);
+    [[nodiscard]] bool estimateVelocity(const PointCloudType::Ptr& scan_ptr,
+                                        const Eigen::Vector3d& v_wl_l = Eigen::Vector3d::Zero(),
+                                        bool use_ransac = false);
 
     // dynamic point removal
     void removeDynamicPoint(const PointCloudType::Ptr& scan_ptr,
@@ -106,28 +106,18 @@ public:
     [[nodiscard]] Eigen::Matrix3d getCovariance() const noexcept { return R_v_; }
 
 private:
-    // solve LSQ problem
-    [[nodiscard]] bool solveLSQ(const Eigen::MatrixXd& lsq_data,
-                                Eigen::Vector3d& v_wl_l, Eigen::Matrix3d& R_v,
-                                bool estimate_sigma = true, bool few_valid_points = false);
-
-    // solve optimization via RANSAC
-    [[nodiscard]] bool solveRANSAC(const Eigen::MatrixXd& lsq_data,
-                                   Eigen::Vector3d& v_wl_l, Eigen::Matrix3d& R_v,
-                                   std::vector<std::size_t>& inlier_idx_best);
-
     // uniform sampling
-    [[nodiscard]] std::vector<std::size_t> sampleUniform(const std::vector<std::unordered_map<std::string, double>>& valid_points,
+    [[nodiscard]] std::vector<std::size_t> sampleUniform(const std::vector<PointInfo>& valid_points,
                                                          const Eigen::Vector3d& v_wl_l) const;
 
     // cosine weight sampling
-    [[nodiscard]] std::vector<std::size_t> sampleCosWeight(const std::vector<std::unordered_map<std::string, double>>& valid_points,
+    [[nodiscard]] std::vector<std::size_t> sampleCosWeight(const std::vector<PointInfo>& valid_points,
                                                            const Eigen::Vector3d& v_wl_l) const;
 
     // weight matrix
-    bool weightMatrix(Eigen::VectorXd& weight, 
-                      const Eigen::MatrixXd& lsq_data,
-                      const Eigen::Vector3d& v_wl_l) const;
+    [[nodiscard]] bool weightMatrix(Eigen::VectorXd& weight,
+                                    const Eigen::MatrixXd& lsq_data,
+                                    const Eigen::Vector3d& v_wl_l) const;
 
     // cosine weight
     static double weightCosine(const Eigen::Vector3d& p_lp_l,
@@ -136,6 +126,16 @@ private:
     // Cauchy robust kernel weight
     static double weightRobustKernelCauchy(const Eigen::Vector4d& lsq_data_row,
                                            const Eigen::Vector3d& v_wl_l);
+
+    // solve LSQ problem
+    [[nodiscard]] bool solveLSQ(const Eigen::MatrixXd& lsq_data,
+                                Eigen::Vector3d& v_wl_l, Eigen::Matrix3d& R_v,
+                                bool estimate_sigma = true, bool few_valid_points = false) const;
+
+    // solve optimization via RANSAC
+    [[nodiscard]] bool solveRANSAC(const Eigen::MatrixXd& lsq_data,
+                                   Eigen::Vector3d& v_wl_l, Eigen::Matrix3d& R_v,
+                                   std::vector<std::size_t>& inlier_idx_best) const;
 
 private:
     // sampling method and sample function table

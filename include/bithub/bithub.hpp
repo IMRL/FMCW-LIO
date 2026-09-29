@@ -103,6 +103,9 @@ private:
 
     // filtered scan point cloud pointer
     PointCloudType::Ptr scan_filtered_ptr_;
+
+    // timestamp and index of filtered points for sorting
+    std::vector<std::pair<float, std::uint32_t>> point_keys_;
 };
 
 // BitHub
@@ -119,10 +122,10 @@ public:
     void callLiDAR(const topic_tools::ShapeShifter::ConstPtr& msg_ptr_in);
 
     // pack LiDAR-inertial measurement
-    bool packMeasLI();
+    [[nodiscard]] bool packMeasLI();
 
     // get LiDAR-inertial measurement package
-    std::shared_ptr<MeasPackLI> getMeasPackLI() const noexcept { return meas_pack_ptr_; }
+    [[nodiscard]] std::shared_ptr<MeasPackLI> getMeasPackLI() const noexcept { return meas_pack_ptr_; }
 
     // publish data
     void publishData();
@@ -150,34 +153,34 @@ private:
     void publishPathGT();
 
     // publish odometry
-    void publishOdometry();
+    void publishOdometry() const;
 
     // publish established map during initialization
-    void publishMapInit();
+    void publishMapInit() const;
 
     // publish scan point cloud in world frame
     void publishScanInWorld();
 
     // publish scan point cloud in body frame
-    void publishScanInBody();
+    void publishScanInBody() const;
 
     // publish dynamic scan point cloud in body frame
-    void publishDynamicScanInBody();
+    void publishDynamicScanInBody() const;
 
     // transform a point from LiDAR frame to world frame
-    void transformPointLiDARToWorld(const std::shared_ptr<StateBase>& state_ptr,
+    void transformPointLiDARToWorld(const Eigen::Matrix3d& R_wb, const Eigen::Vector3d& p_wb_w,
                                     const PointType& pt_in,
-                                    PointType& pt_out);
+                                    PointType& pt_out) const;
 
     // transform a point from LiDAR frame to body frame
     void transformPointLiDARToBody(const PointType& pt_in,
-                                   PointType& pt_out);
+                                   PointType& pt_out) const;
 
     // get CPU type
-    static std::string getCPUType();
+    [[nodiscard]] static std::string getCPUType();
 
     // print system information into terminal
-    void printSystemInfo();
+    void printSystemInfo() const;
 
 private:
     // configuration pointer

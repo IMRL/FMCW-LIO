@@ -85,7 +85,7 @@ void FreeInit::bootstrapVelocity(const std::shared_ptr<MeasPackLI>& meas_ptr) {
     std::vector<std::array<int, 3>> voxel_indices;
     voxel_indices.reserve(meas_ptr->scan_ptr->points.size());
     std::map<std::array<int, 3>, std::size_t> voxel_counts;
-    for (Eigen::Index i = 0; i < meas_ptr->scan_ptr->points.size(); ++i) {
+    for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(meas_ptr->scan_ptr->points.size()); ++i) {
         const auto& point = meas_ptr->scan_ptr->points[i];
         const Eigen::Vector3d p_lp_l(point.x, point.y, point.z);
         const Eigen::Vector3d d_lp_l = p_lp_l.normalized();
@@ -158,7 +158,7 @@ void FreeInit::bootstrapVelocity(const std::shared_ptr<MeasPackLI>& meas_ptr) {
 
             Eigen::MatrixXd inlier_lsq_data(inlier_indices.size(), 4);
             Eigen::VectorXd inlier_weight(inlier_indices.size());
-            for (Eigen::Index i = 0; i < inlier_indices.size(); ++i) {
+            for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(inlier_indices.size()); ++i) {
                 inlier_lsq_data.row(i) = lsq_data.row(inlier_indices[i]);
                 inlier_weight(i) = 1.0 / static_cast<double>(inlier_voxel_counts[voxel_indices[inlier_indices[i]]]);
             }
@@ -207,8 +207,8 @@ void FreeInit::bootstrapVelocity(const std::shared_ptr<MeasPackLI>& meas_ptr) {
     }
 }
 
-bool FreeInit::solveLSQ(const Eigen::MatrixXd& lsq_data, const Eigen::VectorXd& weight, 
-                         Eigen::Vector3d& v_wl_l, Eigen::Matrix3d& R_v) {
+bool FreeInit::solveLSQ(const Eigen::MatrixXd& lsq_data, const Eigen::VectorXd& weight,
+                        Eigen::Vector3d& v_wl_l, Eigen::Matrix3d& R_v) const {
     // construct least square data matrix
     Eigen::MatrixXd D(lsq_data.rows(), 3);
     D.col(0) = lsq_data.col(0);
@@ -242,26 +242,22 @@ bool FreeInit::solveLSQ(const Eigen::MatrixXd& lsq_data, const Eigen::VectorXd& 
 
         const std::size_t dim = col_dim;
         if (use_col_pivoting) {
-            // perform QR decomposition with column pivoting: A * P = Q * R
-            Eigen::ColPivHouseholderQR<Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>> qr(A);
+            // perform in-place QR decomposition with column pivoting: A * P = Q * R
+            Eigen::ColPivHouseholderQR<Eigen::Ref<Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>>> qr(A);
             // get column permutation matrix
             const auto& P = qr.colsPermutation();
-            // extract full upper triangular matrix R from QR decomposition
-            const auto& R_full = qr.matrixQR().template triangularView<Eigen::Upper>().toDenseMatrix();
-            // take top-left col_dim x col_dim block of R
-            Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> R_n = R_full.topRows(dim).leftCols(dim);
+            // take top-left col_dim x col_dim upper triangular block of R
+            Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> R_n = qr.matrixQR().topLeftCorner(dim, dim).template triangularView<Eigen::Upper>();
             // compute y = Q^{\top} * b, then take top col_dim rows as reduced right-hand side
             Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> y = (qr.householderQ().adjoint() * b).topRows(dim);
 
             A = std::move(R_n * P.transpose());
             b = std::move(y);
         } else {
-            // perform standard QR decomposition without pivoting: A = Q * R
-            Eigen::HouseholderQR<Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>> qr(A);
-            // extract full upper triangular matrix R
-            const auto R_full = qr.matrixQR().template triangularView<Eigen::Upper>().toDenseMatrix();
-            // take top-left col_dim x col_dim block of R
-            Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> R_n = R_full.topRows(dim).leftCols(dim);
+            // perform in-place standard QR decomposition without pivoting: A = Q * R
+            Eigen::HouseholderQR<Eigen::Ref<Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>>> qr(A);
+            // take top-left col_dim x col_dim upper triangular block of R
+            Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> R_n = qr.matrixQR().topLeftCorner(dim, dim).template triangularView<Eigen::Upper>();
             // compute y = Q^{\top} * b, then take top col_dim rows
             Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> y = (qr.householderQ().adjoint() * b).topRows(dim);
 
@@ -375,7 +371,7 @@ std::shared_ptr<std::vector<std::shared_ptr<MeasDIV>>> FreeInit::sortMeas(const 
     scan_down_ptr.reset(new PointCloudType());
     uniform_filter_scan_.setInputCloud(meas_ptr->scan_ptr);
     uniform_filter_scan_.filter(*scan_down_ptr);
-    if (scan_down_ptr->points.size() < config_ptr_->point_num_thresh) {
+    if (scan_down_ptr->points.size() < static_cast<std::size_t>(config_ptr_->point_num_thresh)) {
         *scan_down_ptr = *meas_ptr->scan_ptr;
     }
 
@@ -388,7 +384,7 @@ std::shared_ptr<std::vector<std::shared_ptr<MeasDIV>>> FreeInit::sortMeas(const 
 
     // LiDAR point
     std::vector<std::size_t> point_indices(point_num);
-    std::for_each(point_indices.begin(), point_indices.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+    std::iota(point_indices.begin(), point_indices.end(), std::size_t{0});
     std::for_each(std::execution::par,
                   point_indices.begin(), point_indices.end(),
                   [&](const auto point_idx) -> void {
@@ -405,7 +401,7 @@ std::shared_ptr<std::vector<std::shared_ptr<MeasDIV>>> FreeInit::sortMeas(const 
 
     // IMU measurement
     std::vector<std::size_t> imu_indices(imu_num);
-    std::for_each(imu_indices.begin(), imu_indices.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+    std::iota(imu_indices.begin(), imu_indices.end(), std::size_t{0});
     std::for_each(std::execution::par,
                   imu_indices.begin(), imu_indices.end(),
                   [&](const auto imu_idx) -> void {
@@ -483,17 +479,22 @@ void FreeInit::estimateAccelerometerBiasAndGravity() {
     using Vec3dVec = std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>>;
 
     // differentiated acceleration at last time
-    Eigen::Vector3d last_a_wb_w = ((state_kin_ptr_vec[1]->getRotation() * state_kin_ptr_vec[1]->getVelocity()) -
-                                   (state_kin_ptr_vec[0]->getRotation() * state_kin_ptr_vec[0]->getVelocity())) /
-                                  (state_kin_ptr_vec[1]->getTime() - state_kin_ptr_vec[0]->getTime());
+    Eigen::Vector3d last_a_wb_w = Eigen::Vector3d::Zero();
+    if (state_kin_ptr_vec.size() >= 2) {
+        last_a_wb_w = ((state_kin_ptr_vec[1]->getRotation() * state_kin_ptr_vec[1]->getVelocity()) -
+                       (state_kin_ptr_vec[0]->getRotation() * state_kin_ptr_vec[0]->getVelocity())) /
+                      (state_kin_ptr_vec[1]->getTime() - state_kin_ptr_vec[0]->getTime());
+    }
 
     // data accumulation for estimation
     Mat3dVec R_wb_vec;
     Vec3dVec f_wb_w_vec, a_wb_w_vec, g_wb_w_vec;
-    for (std::size_t i = 1; i < state_kin_ptr_vec.size() - 1; ++i) {
+    for (std::size_t i = 1; i + 1 < state_kin_ptr_vec.size(); ++i) {
         double dt = state_kin_ptr_vec[i + 1]->getTime() - state_kin_ptr_vec[i - 1]->getTime();
 
         if (dt < 1.0e-9) {
+            R_wb_vec.push_back(state_kin_ptr_vec[i]->getRotation());
+            f_wb_w_vec.emplace_back(state_kin_ptr_vec[i]->getRotation() * state_kin_ptr_vec[i]->getLinVelRate());
             a_wb_w_vec.push_back(last_a_wb_w);
 
             continue;

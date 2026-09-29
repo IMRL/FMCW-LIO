@@ -145,7 +145,7 @@ void Propagator::propagateStateAndCov(const std::shared_ptr<StateBase>& state_pt
     auto last_state_ptr = state_ptr->cloneState();
     for (std::size_t i = 0; i < meas_ptr->imu_msg_ptr_queue.size(); ++i) {
         // get current IMU data
-        sensor_msgs::Imu::Ptr curr_imu_ptr(new sensor_msgs::Imu(*meas_ptr->imu_msg_ptr_queue[i]));
+        sensor_msgs::Imu::ConstPtr curr_imu_ptr(meas_ptr->imu_msg_ptr_queue[i]);
 
         double dt;
         if (i != (meas_ptr->imu_msg_ptr_queue.size() - 1)) {
@@ -246,7 +246,7 @@ void Propagator::propagateStateAndCov(const std::shared_ptr<StateBase>& state_pt
 void Propagator::propagateNominalState(const std::shared_ptr<StateBase>& state_ptr,
                                        const Eigen::Vector3d& omg_wb_b_head, const Eigen::Vector3d& f_wb_b_head,
                                        const Eigen::Vector3d& omg_wb_b_tail, const Eigen::Vector3d& f_wb_b_tail,
-                                       const double dt) {
+                                       const double dt) const {
     // unbiased measurement
     Eigen::Vector3d bg = state_ptr->getGyroscopeBias();
     Eigen::Vector3d ba = state_ptr->getAccelerometerBias();
@@ -257,10 +257,12 @@ void Propagator::propagateNominalState(const std::shared_ptr<StateBase>& state_p
     Eigen::Vector3d f_wb_b_tail_unbiased = f_wb_b_tail - ba;
 
     // integrate
-    const auto& delta = integrate_func_(state_ptr,
-                                        omg_wb_b_head_unbiased, f_wb_b_head_unbiased,
-                                        omg_wb_b_tail_unbiased, f_wb_b_tail_unbiased,
-                                        dt);
+    Eigen::VectorXd delta;
+    integrate_func_(state_ptr,
+                    omg_wb_b_head_unbiased, f_wb_b_head_unbiased,
+                    omg_wb_b_tail_unbiased, f_wb_b_tail_unbiased,
+                    dt,
+                    delta);
 
     // add integrated state delta
     state_ptr->addDelVec(delta);
@@ -269,7 +271,7 @@ void Propagator::propagateNominalState(const std::shared_ptr<StateBase>& state_p
 void Propagator::propagateCovariance(const std::shared_ptr<StateBase>& state_ptr, Eigen::MatrixXd& P,
                                      const Eigen::Vector3d& omg_wb_b_head, const Eigen::Vector3d& f_wb_b_head,
                                      const Eigen::Vector3d& omg_wb_b_tail, const Eigen::Vector3d& f_wb_b_tail,
-                                     const double dt) {
+                                     const double dt) const {
     // unbiased measurement
     Eigen::Vector3d bg = state_ptr->getGyroscopeBias();
     Eigen::Vector3d ba = state_ptr->getAccelerometerBias();
@@ -335,10 +337,11 @@ Eigen::MatrixXd Propagator::buildInputMatrix(const std::shared_ptr<StateBase>& s
     return F_w;
 }
 
-Eigen::VectorXd Propagator::integrateRungeKutta2(const std::shared_ptr<const StateBase>& state_ptr,
-                                                 const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
-                                                 const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
-                                                 const double dt) {
+void Propagator::integrateRungeKutta2(const std::shared_ptr<const StateBase>& state_ptr,
+                                      const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
+                                      const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
+                                      const double dt,
+                                      Eigen::VectorXd& delta) {
     // using 2-nd order Runge-Kutta method to propagate nominal state
     // navigation state at previous time step
     auto R_wb_i_minus_1 = state_ptr->getRotation();
@@ -354,7 +357,7 @@ Eigen::VectorXd Propagator::integrateRungeKutta2(const std::shared_ptr<const Sta
     Eigen::Vector3d a_wb_w = (0.5 * ((R_wb_i_minus_1 * f_wb_b_head_unbiased) + (R_wb_i * f_wb_b_tail_unbiased))) + g_wb_w_i_minus_1;
 
     // integration increment for state space on direct product manifold
-    Eigen::VectorXd delta = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(state_ptr->getDim()));
+    delta.setZero(static_cast<Eigen::Index>(state_ptr->getDim()));
     Eigen::Vector3d a_dt = a_wb_w * dt;
     // rotation increment
     delta.block<3, 1>(0, 0) = dtheta;
@@ -363,14 +366,13 @@ Eigen::VectorXd Propagator::integrateRungeKutta2(const std::shared_ptr<const Sta
     // position increment
     delta.block<3, 1>(6, 0) = (v_wb_w_i_minus_1 * dt) +
                               (0.5 * a_dt * dt);
-
-    return delta;
 }
 
-Eigen::VectorXd Propagator::integrateRungeKutta3(const std::shared_ptr<const StateBase>& state_ptr,
-                                                 const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
-                                                 const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
-                                                 const double dt) {
+void Propagator::integrateRungeKutta3(const std::shared_ptr<const StateBase>& state_ptr,
+                                      const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
+                                      const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
+                                      const double dt,
+                                      Eigen::VectorXd& delta) {
     // using 3-rd order Runge-Kutta method to propagate nominal state
     // navigation state at previous time step
     auto R_wb_i_minus_1 = state_ptr->getRotation();
@@ -390,7 +392,7 @@ Eigen::VectorXd Propagator::integrateRungeKutta3(const std::shared_ptr<const Sta
     Eigen::Vector3d A_a_dt = ((R_wb_i * f_wb_b_tail_unbiased) - (R_wb_i_minus_1 * f_wb_b_head_unbiased));
 
     // integration increment for state space on direct product manifold
-    Eigen::VectorXd delta = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(state_ptr->getDim()));
+    delta.setZero(static_cast<Eigen::Index>(state_ptr->getDim()));
     double dt_square = dt * dt;
     // rotation increment
     delta.block<3, 1>(0, 0) = dtheta;
@@ -401,14 +403,13 @@ Eigen::VectorXd Propagator::integrateRungeKutta3(const std::shared_ptr<const Sta
     delta.block<3, 1>(6, 0) = (v_wb_w_i_minus_1 * dt) +
                               (0.5 * a_wb_w_i_minus_1 * dt_square) +
                               (A_a_dt * dt_square / 6.0);
-
-    return delta;
 }
 
-Eigen::VectorXd Propagator::integrateRungeKutta4(const std::shared_ptr<const StateBase>& state_ptr,
-                                                 const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
-                                                 const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
-                                                 const double dt) {
+void Propagator::integrateRungeKutta4(const std::shared_ptr<const StateBase>& state_ptr,
+                                      const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
+                                      const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
+                                      const double dt,
+                                      Eigen::VectorXd& delta) {
     // using 4-th order Runge-Kutta method to propagate nominal state
     // lambda function
     auto multiplyQuaternionsJPL = [](const Eigen::Vector4d& quat1, const Eigen::Vector4d& quat2) -> Eigen::Vector4d {
@@ -587,7 +588,7 @@ Eigen::VectorXd Propagator::integrateRungeKutta4(const std::shared_ptr<const Sta
     Eigen::Vector3d k4_p = p3_dot * dt;
 
     // integration increment for state space on direct product manifold
-    Eigen::VectorXd delta = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(state_ptr->getDim()));
+    delta.setZero(static_cast<Eigen::Index>(state_ptr->getDim()));
     // rotation increment
     delta.block<3, 1>(0, 0) = SO3::Log(SO3(transQuatToRotJPL(dq).transpose()));
     // velocity increment
@@ -600,14 +601,13 @@ Eigen::VectorXd Propagator::integrateRungeKutta4(const std::shared_ptr<const Sta
                               ((1.0 / 3.0) * k2_p) +
                               ((1.0 / 3.0) * k3_p) +
                               ((1.0 / 6.0) * k4_p);
-
-    return delta;
 }
 
-Eigen::VectorXd Propagator::integrateMechanization(const std::shared_ptr<const StateBase>& state_ptr,
-                                                   const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
-                                                   const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
-                                                   const double dt) {
+void Propagator::integrateMechanization(const std::shared_ptr<const StateBase>& state_ptr,
+                                        const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
+                                        const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
+                                        const double dt,
+                                        Eigen::VectorXd& delta) {
     // using mechanization method to propagate nominal state
     // navigation state at previous time step
     auto R_wb_i_minus_1 = state_ptr->getRotation();
@@ -630,7 +630,7 @@ Eigen::VectorXd Propagator::integrateMechanization(const std::shared_ptr<const S
     Eigen::Vector3d sculling_comp = (dtheta_i_minus_1.cross(dv_i) + dv_i_minus_1.cross(dtheta_i)) / 12.0;
 
     // integration increment for state space on direct product manifold
-    Eigen::VectorXd delta = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(state_ptr->getDim()));
+    delta.setZero(static_cast<Eigen::Index>(state_ptr->getDim()));
     // rotation increment
     delta.block<3, 1>(0, 0) = dtheta_i +
                               coning_comp;
@@ -640,14 +640,13 @@ Eigen::VectorXd Propagator::integrateMechanization(const std::shared_ptr<const S
     delta.block<3, 1>(3, 0) = delta_v_wb_w_i;
     // position increment
     delta.block<3, 1>(6, 0) = (v_wb_w_i_minus_1 + (0.5 * delta_v_wb_w_i)) * dt;
-
-    return delta;
 }
 
-Eigen::VectorXd Propagator::integrateACI2(const std::shared_ptr<const StateBase>& state_ptr,
-                                          const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
-                                          const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
-                                          const double dt) {
+void Propagator::integrateACI2(const std::shared_ptr<const StateBase>& state_ptr,
+                               const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
+                               const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
+                               const double dt,
+                               Eigen::VectorXd& delta) {
     // using ACI2 method to propagate nominal state
     // navigation state at previous time step
     auto R_wb_i_minus_1 = state_ptr->getRotation();
@@ -666,7 +665,7 @@ Eigen::VectorXd Propagator::integrateACI2(const std::shared_ptr<const StateBase>
     Eigen::Matrix3d Xi_2 = Xi_packed.block(0, 3, 3, 3);
 
     // integration increment for state space on direct product manifold
-    Eigen::VectorXd delta = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(state_ptr->getDim()));
+    delta.setZero(static_cast<Eigen::Index>(state_ptr->getDim()));
     Eigen::Vector3d g_dt = g_wb_w_i_minus_1 * dt;
     // rotation increment
     delta.block<3, 1>(0, 0) = omg_wb_b_avg_unbiased * dt;
@@ -677,8 +676,6 @@ Eigen::VectorXd Propagator::integrateACI2(const std::shared_ptr<const StateBase>
     delta.block<3, 1>(6, 0) = (v_wb_w_i_minus_1 * dt) +
                               (R_wb_i_minus_1 * Xi_2 * f_wb_b_avg_unbiased) +
                               (0.5 * g_dt * dt);
-
-    return delta;
 }
 
 void Propagator::assembleXiMatrixPack(Eigen::Matrix<double, 3, 6>& Xi_packed,

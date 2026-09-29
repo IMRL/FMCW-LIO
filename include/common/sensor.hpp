@@ -138,7 +138,7 @@ public:
             // time field type: index 1 in tuple
             TimeType time_value;
             std::memcpy(&time_value, msg_data_ptr + offset_time_, sizeof(TimeType));
-            timestamp = static_cast<float>(time_value - std::get<TimeType>(std::get<1>(*lidar_tuple_ptr_)));
+            timestamp = static_cast<float>(time_value - time_lambda);
         }, std::get<1>(*lidar_tuple_ptr_));
     }
 

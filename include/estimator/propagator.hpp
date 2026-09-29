@@ -107,13 +107,13 @@ private:
     void propagateNominalState(const std::shared_ptr<StateBase>& state_ptr,
                                const Eigen::Vector3d& omg_wb_b_head, const Eigen::Vector3d& f_wb_b_head,
                                const Eigen::Vector3d& omg_wb_b_tail, const Eigen::Vector3d& f_wb_b_tail,
-                               double dt);
+                               double dt) const;
 
     // propagate covariance
     void propagateCovariance(const std::shared_ptr<StateBase>& state_ptr, Eigen::MatrixXd& P,
                              const Eigen::Vector3d& omg_wb_b_head, const Eigen::Vector3d& f_wb_b_head,
                              const Eigen::Vector3d& omg_wb_b_tail, const Eigen::Vector3d& f_wb_b_tail,
-                             double dt);
+                             double dt) const;
 
     // state transition matrix
     static Eigen::MatrixXd buildStateMatrix(const std::shared_ptr<StateBase>& state_ptr,
@@ -126,35 +126,40 @@ private:
                                             double dt);
 
     // propagate nominal state using 2-nd order Runge-Kutta method
-    static Eigen::VectorXd integrateRungeKutta2(const std::shared_ptr<const StateBase>& state_ptr,
-                                                const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
-                                                const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
-                                                double dt);
+    static void integrateRungeKutta2(const std::shared_ptr<const StateBase>& state_ptr,
+                                     const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
+                                     const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
+                                     double dt,
+                                     Eigen::VectorXd& delta);
 
     // propagate nominal state using 3-rd order Runge-Kutta method
-    static Eigen::VectorXd integrateRungeKutta3(const std::shared_ptr<const StateBase>& state_ptr,
-                                                const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
-                                                const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
-                                                double dt);
+    static void integrateRungeKutta3(const std::shared_ptr<const StateBase>& state_ptr,
+                                     const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
+                                     const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
+                                     double dt,
+                                     Eigen::VectorXd& delta);
 
     // propagate nominal state using 4-th order Runge-Kutta method
-    static Eigen::VectorXd integrateRungeKutta4(const std::shared_ptr<const StateBase>& state_ptr,
-                                                const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
-                                                const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
-                                                double dt);
+    static void integrateRungeKutta4(const std::shared_ptr<const StateBase>& state_ptr,
+                                     const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
+                                     const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
+                                     double dt,
+                                     Eigen::VectorXd& delta);
 
     // propagate nominal state using two-sample mechanization method
-    static Eigen::VectorXd integrateMechanization(const std::shared_ptr<const StateBase>& state_ptr,
-                                                  const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
-                                                  const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
-                                                  double dt);
+    static void integrateMechanization(const std::shared_ptr<const StateBase>& state_ptr,
+                                       const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
+                                       const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
+                                       double dt,
+                                       Eigen::VectorXd& delta);
 
     // propagate nominal state using analytic combined IMU integration (ACI2) method:
     // Yang et al., "Analytic Combined IMU Integration (ACI2) For Visual Inertial Navigation.", IEEE ICRA, 2020.
-    static Eigen::VectorXd integrateACI2(const std::shared_ptr<const StateBase>& state_ptr,
-                                         const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
-                                         const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
-                                         double dt);
+    static void integrateACI2(const std::shared_ptr<const StateBase>& state_ptr,
+                              const Eigen::Vector3d& omg_wb_b_head_unbiased, const Eigen::Vector3d& f_wb_b_head_unbiased,
+                              const Eigen::Vector3d& omg_wb_b_tail_unbiased, const Eigen::Vector3d& f_wb_b_tail_unbiased,
+                              double dt,
+                              Eigen::VectorXd& delta);
 
     // preintegrated IMU measurement Jacobian matrix for ACI2 method
     static void assembleXiMatrixPack(Eigen::Matrix<double, 3, 6>& Xi_packed,
@@ -205,7 +210,7 @@ private:
     double last_scan_end_time_;
 
     // last IMU message pointer
-    sensor_msgs::Imu::Ptr last_imu_ptr_;
+    sensor_msgs::Imu::ConstPtr last_imu_ptr_;
 
     // compensated scan in LiDAR frame
     PointCloudType::Ptr scan_compensated_lidar_ptr_;

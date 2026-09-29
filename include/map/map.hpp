@@ -80,11 +80,11 @@ public:
 
     // search nearest points in map
     void searchNearestPoints(const PointType& point_world, int k_nearest,
-                             PointVec1D& nearest_points, std::vector<float>& point_distance);
+                             PointVec1D& nearest_points, std::vector<float>& point_distance) const;
 
     // transform a point from LiDAR frame to world frame
-    void transPointLiDARToWorld(const std::shared_ptr<StateBase>& state_ptr,
-                                const PointType& pt_in, PointType& pt_out);
+    void transPointLiDARToWorld(const Eigen::Matrix3d& R_wb, const Eigen::Vector3d& p_wb_w,
+                                const PointType& pt_in, PointType& pt_out) const;
 
     // if need to initialize map
     [[nodiscard]] bool isNeedInitializeMap() const;

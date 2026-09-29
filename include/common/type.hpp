@@ -151,14 +151,16 @@ using MapStructurePtrVariant = std::variant<std::shared_ptr<IkdTreeType>,
 // function type
 // integrate function
 class StateBase;
-using IntegrateFunction = std::function<Eigen::VectorXd(const std::shared_ptr<const StateBase>&,
-                                                        const Eigen::Vector3d&, const Eigen::Vector3d&,
-                                                        const Eigen::Vector3d&, const Eigen::Vector3d&,
-                                                        const double)>;
+using IntegrateFunction = std::function<void(const std::shared_ptr<const StateBase>&,
+                                             const Eigen::Vector3d&, const Eigen::Vector3d&,
+                                             const Eigen::Vector3d&, const Eigen::Vector3d&,
+                                             const double,
+                                             Eigen::VectorXd&)>;
 // point weight function
 using PointWeightFunction = std::function<double(const double)>;
 // sample function
-using SampleFunction = std::function<std::vector<std::size_t>(const std::vector<std::unordered_map<std::string, double>>&,
+class PointInfo;
+using SampleFunction = std::function<std::vector<std::size_t>(const std::vector<PointInfo>&,
                                                               const Eigen::Vector3d&)>;
 
 // tuple type
@@ -188,14 +190,34 @@ using SamplingTable = std::unordered_map<SamplingMethod,
                                          SampleFunction>;
 
 // class type
+// PointInfo
+class PointInfo {
+public:
+    PointInfo() : x(0.0), y(0.0), z(0.0),
+                  azimuth(0.0), elevation(0.0),
+                  x_normalized(0.0), y_normalized(0.0), z_normalized(0.0),
+                  doppler_velocity(0.0),
+                  is_valid(false) {}
+
+public:
+    // point position
+    double x, y, z;
+    // point azimuth and elevation angle
+    double azimuth, elevation;
+    // normalized point direction
+    double x_normalized, y_normalized, z_normalized;
+    // point Doppler velocity
+    double doppler_velocity;
+    // valid point flag
+    bool is_valid;
+};
+
 // MeasPackLI
 class MeasPackLI {
 public:
-    explicit MeasPackLI() : scan_beg_time(0.0),
-                            scan_end_time(0.0) {
-        // reset scan pointer
-        scan_ptr.reset(new PointCloudType());
-    };
+    MeasPackLI() : scan_beg_time(0.0),
+                   scan_end_time(0.0),
+                   scan_ptr(new PointCloudType()) {}
 
 public:
     // scan begin timestamp

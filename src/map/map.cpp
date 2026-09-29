@@ -99,12 +99,15 @@ void Map::initializeMap(const std::shared_ptr<StateBase>& state_ptr,
             PointCloudType::Ptr scan_world_ptr(new PointCloudType());
             scan_world_ptr->points.resize(scan_size);
 
+            const auto R_wb = state_ptr->getRotation();
+            const auto p_wb_w = state_ptr->getPosition();
+
             std::vector<std::size_t> point_indices(scan_size);
-            std::for_each(point_indices.begin(), point_indices.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+            std::iota(point_indices.begin(), point_indices.end(), std::size_t{0});
             std::for_each(std::execution::par,
                           point_indices.begin(), point_indices.end(),
                           [&](auto point_idx) -> void {
-                transPointLiDARToWorld(state_ptr,
+                transPointLiDARToWorld(R_wb, p_wb_w,
                                        scan_ptr->points[point_idx], scan_world_ptr->points[point_idx]);
             });
 
@@ -197,12 +200,14 @@ PointCloudType::Ptr Map::addMapPoints(const std::shared_ptr<StateBase>& state_pt
     points_to_add.reserve(size_scan);
     points_no_need_downsample.reserve(size_scan);
 
-    for (int i = 0; i < size_scan; ++i) {
+    const auto R_wb = state_ptr->getRotation();
+    const auto p_wb_w = state_ptr->getPosition();
+    for (std::size_t i = 0; i < size_scan; ++i) {
         if (is_transformed) {
             scan_world_ptr->points[i] = scan_ptr->points[i];
         } else {
             // transform point from LiDAR frame to world frame
-            transPointLiDARToWorld(state_ptr,
+            transPointLiDARToWorld(R_wb, p_wb_w,
                                    scan_ptr->points[i], scan_world_ptr->points[i]);
         }
         if (!nearest_points[i].empty()) {
@@ -233,7 +238,7 @@ PointCloudType::Ptr Map::addMapPoints(const std::shared_ptr<StateBase>& state_pt
             };
 
             auto dist = calDist(scan_world_ptr->points[i], center_point);
-            for (int re_add_i = 0; re_add_i < config_ptr_->nearest_point_num; ++re_add_i) {
+            for (std::size_t re_add_i = 0; re_add_i < config_ptr_->nearest_point_num; ++re_add_i) {
                 // add point if nearest point number less than matching point number
                 if (points_near.size() < config_ptr_->nearest_point_num) {
                     break;
@@ -264,7 +269,7 @@ PointCloudType::Ptr Map::addMapPoints(const std::shared_ptr<StateBase>& state_pt
 }
 
 void Map::searchNearestPoints(const PointType& point_world, const int k_nearest,
-                              PointVec1D& nearest_points, std::vector<float>& point_distance) {
+                              PointVec1D& nearest_points, std::vector<float>& point_distance) const {
     // search nearest points
     std::visit([&](auto&& map_structure_ptr) -> void {
         map_structure_ptr->Nearest_Search(point_world, k_nearest,
@@ -272,12 +277,8 @@ void Map::searchNearestPoints(const PointType& point_world, const int k_nearest,
     }, map_structure_ptr_);
 }
 
-void Map::transPointLiDARToWorld(const std::shared_ptr<StateBase>& state_ptr,
-                                 const PointType& pt_in, PointType& pt_out) {
-    // get pose of body frame in world frame
-    auto R_wb = state_ptr->getRotation();
-    auto p_wb_w = state_ptr->getPosition();
-
+void Map::transPointLiDARToWorld(const Eigen::Matrix3d& R_wb, const Eigen::Vector3d& p_wb_w,
+                                 const PointType& pt_in, PointType& pt_out) const {
     // transform point from LiDAR frame to world frame
     Eigen::Vector3d p_lp_l{pt_in.x, pt_in.y, pt_in.z};
     Eigen::Vector3d p_wp_w = (R_wb * ((config_ptr_->R_bl * p_lp_l) + config_ptr_->p_bl_b)) + p_wb_w;

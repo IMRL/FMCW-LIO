@@ -94,11 +94,12 @@ public:
     {
         PointType point;
         float dist = 0.0;
-        PointType_CMP(PointType p = PointType(), float d = INFINITY)
-        {
-            this->point = p;
-            this->dist = d;
-        };
+        //PointType_CMP(PointType p = PointType(), float d = INFINITY)
+        //{
+        //    this->point = p;
+        //    this->dist = d;
+        //};
+        PointType_CMP(PointType p = PointType(), float d = INFINITY) : point(p), dist(d) {};
         bool operator<(const PointType_CMP &a) const
         {
             if (fabs(dist - a.dist) < 1e-10)
@@ -133,11 +134,13 @@ public:
             MoveDown(0);
             return;
         }
-        PointType_CMP top()
+        //PointType_CMP top()
+        const PointType_CMP &top() const
         {
             return heap[0];
         }
-        void push(PointType_CMP point)
+        //void push(PointType_CMP point)
+        void push(const PointType_CMP &point)
         {
             if (heap_size >= cap)
                 return;
@@ -152,6 +155,17 @@ public:
         }
         void clear()
         {
+            heap_size = 0;
+            return;
+        }
+        void reserve(int max_capacity)
+        {
+            if (max_capacity > cap)
+            {
+                delete[] heap;
+                cap = max_capacity;
+                heap = new PointType_CMP[max_capacity];
+            }
             heap_size = 0;
             return;
         }
@@ -286,12 +300,16 @@ private:
     void Test_Lock_States(KD_TREE_NODE *root);
     void BuildTree(KD_TREE_NODE **root, int l, int r, PointVector &Storage);
     void Rebuild(KD_TREE_NODE **root);
-    int Delete_by_range(KD_TREE_NODE **root, BoxPointType boxpoint, bool allow_rebuild, bool is_downsample);
+    //int Delete_by_range(KD_TREE_NODE **root, BoxPointType boxpoint, bool allow_rebuild, bool is_downsample);
+    int Delete_by_range(KD_TREE_NODE **root, const BoxPointType &boxpoint, bool allow_rebuild, bool is_downsample);
     void Delete_by_point(KD_TREE_NODE **root, PointType point, bool allow_rebuild);
-    void Add_by_point(KD_TREE_NODE **root, PointType point, bool allow_rebuild, int father_axis);
+    //void Add_by_point(KD_TREE_NODE **root, PointType point, bool allow_rebuild, int father_axis);
+    void Add_by_point(KD_TREE_NODE **root, const PointType &point, bool allow_rebuild, int father_axis);
     void Add_by_range(KD_TREE_NODE **root, BoxPointType boxpoint, bool allow_rebuild);
-    void Search(KD_TREE_NODE *root, int k_nearest, PointType point, MANUAL_HEAP &q, float max_dist); //priority_queue<PointType_CMP>
-    void Search_by_range(KD_TREE_NODE *root, BoxPointType boxpoint, PointVector &Storage);
+    //void Search(KD_TREE_NODE *root, int k_nearest, PointType point, MANUAL_HEAP &q, float max_dist); //priority_queue<PointType_CMP>
+    void Search(KD_TREE_NODE *root, int k_nearest, const PointType &point, MANUAL_HEAP &q, float max_dist); //priority_queue<PointType_CMP>
+    //void Search_by_range(KD_TREE_NODE *root, BoxPointType boxpoint, PointVector &Storage);
+    void Search_by_range(KD_TREE_NODE *root, const BoxPointType &boxpoint, PointVector &Storage);
     void Search_by_radius(KD_TREE_NODE *root, PointType point, float radius, PointVector &Storage);
     bool Criterion_Check(KD_TREE_NODE *root);
     void Push_Down(KD_TREE_NODE *root);

@@ -70,7 +70,9 @@ Velocimeter::Velocimeter(const std::shared_ptr<const Config>& config_ptr) : logg
                                                                             sigma_ratio_{10.0},
                                                                             vel_sigma_offset_few_(1.0, 3.0, 5.0),
                                                                             success_{},
-                                                                            time_{} {
+                                                                            time_{},
+                                                                            v_wl_l_(Eigen::Vector3d::Zero()),
+                                                                            R_v_(Eigen::Matrix3d::Zero()) {
     // RANSAC iteration number
     ransac_iteration_num_ = std::ceil((std::log(1.0 - config_ptr_->success_prob)) /
                                       std::log(1.0 - std::pow(1.0 - config_ptr_->outlier_prob,
@@ -91,7 +93,7 @@ bool Velocimeter::estimateVelocity(const PointCloudType::Ptr& scan_ptr,
     success_ = false;
 
     // store points within FoV and set detection range
-    std::vector<std::unordered_map<std::string, double>> valid_points;
+    std::vector<PointInfo> valid_points;
 
     // preprocess LiDAR scan
     PointCloudType::Ptr scan_pre_ptr(new PointCloudType());
@@ -107,11 +109,11 @@ bool Velocimeter::estimateVelocity(const PointCloudType::Ptr& scan_ptr,
     }
 
     auto scan_point_size = scan_pre_ptr->points.size();
-    std::vector<std::unordered_map<std::string, double>> all_points;
+    std::vector<PointInfo> all_points;
     all_points.resize(scan_point_size);
 
     std::vector<std::size_t> point_indices(scan_point_size);
-    std::for_each(point_indices.begin(), point_indices.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+    std::iota(point_indices.begin(), point_indices.end(), std::size_t{0});
     std::for_each(std::execution::par,
                   point_indices.begin(), point_indices.end(),
                   [&](auto point_idx) -> void {
@@ -131,25 +133,25 @@ bool Velocimeter::estimateVelocity(const PointCloudType::Ptr& scan_ptr,
             (std::fabs(elevation) < angles::from_degrees(config_ptr_->elevation_thresh_deg)) &&
             (p_lp_l.z() > config_ptr_->min_point_z) &&
             (p_lp_l.z() < config_ptr_->max_point_z)) {
-            // key: x, y, z, azimuth, elevation, x_normalized, y_normalized, z_normalized, doppler_velocity
-            std::unordered_map<std::string, double> point_info;
+            // point information: x, y, z, azimuth, elevation, x_normalized, y_normalized, z_normalized, doppler_velocity
+            auto& point_info = all_points[point_idx];
 
-            point_info["x"] = point.x;
-            point_info["y"] = point.y;
-            point_info["z"] = point.z;
-            point_info["azimuth"] = azimuth;
-            point_info["elevation"] = elevation;
-            point_info["x_normalized"] = point.x * inv_dist;
-            point_info["y_normalized"] = point.y * inv_dist;
-            point_info["z_normalized"] = point.z * inv_dist;
-            point_info["doppler_velocity"] = -point.intensity;
-
-            all_points[point_idx] = point_info;
+            point_info.x = point.x;
+            point_info.y = point.y;
+            point_info.z = point.z;
+            point_info.azimuth = azimuth;
+            point_info.elevation = elevation;
+            point_info.x_normalized = point.x * inv_dist;
+            point_info.y_normalized = point.y * inv_dist;
+            point_info.z_normalized = point.z * inv_dist;
+            point_info.doppler_velocity = -point.intensity;
+            point_info.is_valid = true;
         }
     });
 
+    valid_points.reserve(scan_point_size);
     for (const auto& item : all_points) {
-        if (!item.empty()) {
+        if (item.is_valid) {
             valid_points.push_back(item);
         }
     }
@@ -164,10 +166,10 @@ bool Velocimeter::estimateVelocity(const PointCloudType::Ptr& scan_ptr,
     Eigen::Index idx = 0;
     Eigen::MatrixXd lsq_data(valid_points.size(), 4);
     for (const auto& valid_point : valid_points) {
-        lsq_data.row(idx++) = Eigen::Vector4d(valid_point.at("x_normalized"),
-                                              valid_point.at("y_normalized"),
-                                              valid_point.at("z_normalized"),
-                                              valid_point.at("doppler_velocity"));
+        lsq_data.row(idx++) = Eigen::Vector4d(valid_point.x_normalized,
+                                              valid_point.y_normalized,
+                                              valid_point.z_normalized,
+                                              valid_point.doppler_velocity);
     }
 
     // solve optimization problem
@@ -224,16 +226,15 @@ void Velocimeter::removeDynamicPoint(const PointCloudType::Ptr& scan_ptr,
     std::size_t point_size = scan_ptr->points.size();
     scan_static_ptr->points.reserve(point_size);
     scan_dynamic_ptr->points.reserve(point_size);
+    const Eigen::Vector3d v_wl_l_normalized = v_wl_l.normalized();
+    const double v_wl_l_norm = v_wl_l.norm();
     for (std::size_t i = 0; i < point_size; ++i) {
         const auto& point = scan_ptr->points[i];
         Eigen::Vector3d point_normalized = Eigen::Vector3d(point.x, point.y, point.z).normalized();
-        Eigen::Vector3d v_wl_l_normalized = v_wl_l.normalized();
 
         // predicted Doppler velocity
         double pred_doppler = -point_normalized.dot(v_wl_l);
         double doppler_error = std::abs(pred_doppler - point.intensity);
-
-        double v_wl_l_norm = v_wl_l.norm();
 
         // use cosine weight (do not scale threshold for near-zero velocity case)
         double cos_weight_or_not = ((v_wl_l_norm > config_ptr_->zero_velocity_thresh) ?
@@ -253,14 +254,14 @@ void Velocimeter::removeDynamicPoint(const PointCloudType::Ptr& scan_ptr,
     logger_velocimetry_ptr->dynamic_point_num = scan_dynamic_ptr->points.size();
 }
 
-std::vector<std::size_t> Velocimeter::sampleUniform(const std::vector<std::unordered_map<std::string, double>>& valid_points,
-                                                    const Eigen::Vector3d& v_wl_l) const {
+std::vector<std::size_t> Velocimeter::sampleUniform(const std::vector<PointInfo>& valid_points,
+                                                    [[maybe_unused]] const Eigen::Vector3d& v_wl_l) const {
     // divide points into azimuth and elevation regions
     std::map<std::pair<std::size_t, std::size_t>, std::vector<std::size_t>> region_points_map;
     for (std::size_t i = 0; i < valid_points.size(); ++i) {
-        const std::unordered_map<std::string, double>& valid_point = valid_points[i];
-        double azimuth = valid_point.at("azimuth");
-        double elevation = valid_point.at("elevation");
+        const PointInfo& valid_point = valid_points[i];
+        double azimuth = valid_point.azimuth;
+        double elevation = valid_point.elevation;
 
         // interval each point belongs
         auto azimuth_index = std::min(static_cast<std::size_t>((azimuth + M_PI_2) / M_PI *
@@ -330,21 +331,21 @@ std::vector<std::size_t> Velocimeter::sampleUniform(const std::vector<std::unord
     return selected_indices;
 }
 
-std::vector<std::size_t> Velocimeter::sampleCosWeight(const std::vector<std::unordered_map<std::string, double>>& valid_points,
+std::vector<std::size_t> Velocimeter::sampleCosWeight(const std::vector<PointInfo>& valid_points,
                                                       const Eigen::Vector3d& v_wl_l) const {
     // count weight (absolute value of cos_theta) and index of each point
     std::vector<std::pair<double, std::size_t>> weights_indices;
     weights_indices.resize(valid_points.size());
 
     std::vector<std::size_t> valid_point_indices(valid_points.size());
-    std::for_each(valid_point_indices.begin(), valid_point_indices.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+    std::iota(valid_point_indices.begin(), valid_point_indices.end(), std::size_t{0});
     std::for_each(std::execution::par,
                   valid_point_indices.begin(), valid_point_indices.end(),
                   [&](auto point_idx) -> void {
         // use cosine between point direction and velocity vector
-        Eigen::Vector3d p_lp_l(valid_points[point_idx].at("x"),
-                               valid_points[point_idx].at("y"),
-                               valid_points[point_idx].at("z"));
+        Eigen::Vector3d p_lp_l(valid_points[point_idx].x,
+                               valid_points[point_idx].y,
+                               valid_points[point_idx].z);
 
         weights_indices[point_idx].first = weightCosine(p_lp_l, v_wl_l);
         weights_indices[point_idx].second = point_idx;
@@ -352,10 +353,11 @@ std::vector<std::size_t> Velocimeter::sampleCosWeight(const std::vector<std::uno
 
     // cumulative weight
     std::vector<double> cumulative_weights(weights_indices.size());
-    std::inclusive_scan(weights_indices.begin(), weights_indices.end(),
-                        cumulative_weights.begin(),
-                        [](double sum, const std::pair<double, std::size_t>& p) -> double { return (sum + p.first); },
-                        0.0);
+    std::transform_inclusive_scan(weights_indices.begin(), weights_indices.end(),
+                                  cumulative_weights.begin(),
+                                  [](double lhs, double rhs) -> double { return (lhs + rhs); },
+                                  [](const std::pair<double, std::size_t>& p) -> double { return p.first; },
+                                  0.0);
 
     // random number generator
     std::random_device rd;
@@ -377,11 +379,12 @@ std::vector<std::size_t> Velocimeter::sampleCosWeight(const std::vector<std::uno
     while (selected_indices.size() < (ransac_iteration_num_ * config_ptr_->ransac_point_num)) {
         // sum of remaining weight
         std::vector<double> cumulative_remaining_weights(weights_indices.size());
-        std::inclusive_scan(weights_indices.begin(), weights_indices.end(),
-                            cumulative_remaining_weights.begin(),
-                            [](double sum, const std::pair<double, std::size_t>& p) -> double { return (sum + p.first); },
-                            0.0);
-        double total_weight = cumulative_remaining_weights.back();
+        std::transform_inclusive_scan(weights_indices.begin(), weights_indices.end(),
+                                      cumulative_remaining_weights.begin(),
+                                      [](double lhs, double rhs) -> double { return (lhs + rhs); },
+                                      [](const std::pair<double, std::size_t>& p) -> double { return p.first; },
+                                      0.0);
+        total_weight = cumulative_remaining_weights.back();
 
         std::uniform_real_distribution<double> uniform_distribution_weight(0.0, total_weight);
         auto sampled_value = uniform_distribution_weight(gen);
@@ -412,7 +415,7 @@ bool Velocimeter::weightMatrix(Eigen::VectorXd& weight,
     if (config_ptr_->use_cos_weight &&
         (v_wl_l.norm() > config_ptr_->zero_velocity_thresh)) {
         std::vector<std::size_t> lsq_data_indices(lsq_data.rows());
-        std::for_each(lsq_data_indices.begin(), lsq_data_indices.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+        std::iota(lsq_data_indices.begin(), lsq_data_indices.end(), std::size_t{0});
         std::for_each(std::execution::par,
                       lsq_data_indices.begin(), lsq_data_indices.end(),
                       [&](auto lsq_data_idx) -> void {
@@ -426,7 +429,7 @@ bool Velocimeter::weightMatrix(Eigen::VectorXd& weight,
     // robust kernel weight
     if (config_ptr_->robust_kernel == RobustKernelType::Cauchy) {
         std::vector<std::size_t> lsq_data_indices(lsq_data.rows());
-        std::for_each(lsq_data_indices.begin(), lsq_data_indices.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+        std::iota(lsq_data_indices.begin(), lsq_data_indices.end(), std::size_t{0});
         std::for_each(std::execution::par,
                       lsq_data_indices.begin(), lsq_data_indices.end(),
                       [&](auto lsq_data_idx) -> void {
@@ -461,7 +464,7 @@ double Velocimeter::weightRobustKernelCauchy(const Eigen::Vector4d& lsq_data_row
 
 bool Velocimeter::solveLSQ(const Eigen::MatrixXd& lsq_data,
                            Eigen::Vector3d& v_wl_l, Eigen::Matrix3d& R_v,
-                           bool estimate_cov, bool few_valid_points) {
+                           bool estimate_cov, bool few_valid_points) const {
     // construct least square data matrix
     Eigen::MatrixXd D(lsq_data.rows(), 3);
     D.col(0) = lsq_data.col(0);
@@ -502,26 +505,22 @@ bool Velocimeter::solveLSQ(const Eigen::MatrixXd& lsq_data,
 
         const std::size_t dim = col_dim;
         if (use_col_pivoting) {
-            // perform QR decomposition with column pivoting: A * P = Q * R
-            Eigen::ColPivHouseholderQR<Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>> qr(A);
+            // perform in-place QR decomposition with column pivoting: A * P = Q * R
+            Eigen::ColPivHouseholderQR<Eigen::Ref<Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>>> qr(A);
             // get column permutation matrix
             const auto& P = qr.colsPermutation();
-            // extract full upper triangular matrix R from QR decomposition
-            const auto& R_full = qr.matrixQR().template triangularView<Eigen::Upper>().toDenseMatrix();
-            // take top-left col_dim x col_dim block of R
-            Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> R_n = R_full.topRows(dim).leftCols(dim);
+            // take top-left col_dim x col_dim upper triangular block of R
+            Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> R_n = qr.matrixQR().topLeftCorner(dim, dim).template triangularView<Eigen::Upper>();
             // compute y = Q^{\top} * b, then take top col_dim rows as reduced right-hand side
             Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> y = (qr.householderQ().adjoint() * b).topRows(dim);
 
             A = std::move(R_n * P.transpose());
             b = std::move(y);
         } else {
-            // perform standard QR decomposition without pivoting: A = Q * R
-            Eigen::HouseholderQR<Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>> qr(A);
-            // extract full upper triangular matrix R
-            const auto R_full = qr.matrixQR().template triangularView<Eigen::Upper>().toDenseMatrix();
-            // take top-left col_dim x col_dim block of R
-            Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> R_n = R_full.topRows(dim).leftCols(dim);
+            // perform in-place standard QR decomposition without pivoting: A = Q * R
+            Eigen::HouseholderQR<Eigen::Ref<Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>>> qr(A);
+            // take top-left col_dim x col_dim upper triangular block of R
+            Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> R_n = qr.matrixQR().topLeftCorner(dim, dim).template triangularView<Eigen::Upper>();
             // compute y = Q^{\top} * b, then take top col_dim rows
             Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> y = (qr.householderQ().adjoint() * b).topRows(dim);
 
@@ -581,7 +580,12 @@ bool Velocimeter::solveLSQ(const Eigen::MatrixXd& lsq_data,
 
 bool Velocimeter::solveRANSAC(const Eigen::MatrixXd& lsq_data,
                               Eigen::Vector3d& v_wl_l, Eigen::Matrix3d& R_v,
-                              std::vector<std::size_t>& inlier_idx_best) {
+                              std::vector<std::size_t>& inlier_idx_best) const {
+    // not enough sampled indices
+    if (sampled_indices_.size() < (ransac_iteration_num_ * config_ptr_->ransac_point_num)) {
+        return false;
+    }
+
     // construct least square data matrix
     Eigen::MatrixXd D(lsq_data.rows(), 3);
     D.col(0) = lsq_data.col(0);
@@ -590,11 +594,13 @@ bool Velocimeter::solveRANSAC(const Eigen::MatrixXd& lsq_data,
 
     Eigen::VectorXd V = lsq_data.col(3);
 
+    const Eigen::Vector3d v_wl_l_prior = v_wl_l;
+
     // parallel RANSAC iteration
     std::mutex best_mutex;
     std::atomic<bool> early_stop(false);
     std::vector<std::size_t> ransac_iters(ransac_iteration_num_);
-    std::for_each(ransac_iters.begin(), ransac_iters.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+    std::iota(ransac_iters.begin(), ransac_iters.end(), std::size_t{0});
     std::for_each(std::execution::par,
                   ransac_iters.begin(), ransac_iters.end(),
                   [&](std::size_t k) -> void {
@@ -608,8 +614,8 @@ bool Velocimeter::solveRANSAC(const Eigen::MatrixXd& lsq_data,
             lsq_data_iter.row(static_cast<Eigen::Index>(i)) = lsq_data.row(static_cast<Eigen::Index>(sampled_indices_[k * config_ptr_->ransac_point_num + i]));
         }
 
-        Eigen::Vector3d local_v_wl_l;
-        Eigen::Matrix3d local_R_v;
+        Eigen::Vector3d local_v_wl_l = v_wl_l_prior;
+        Eigen::Matrix3d local_R_v = Eigen::Matrix3d::Zero();
         std::vector<std::size_t> local_inlier_idx;
         bool is_success = solveLSQ(lsq_data_iter,
                                    local_v_wl_l, local_R_v,
@@ -617,7 +623,7 @@ bool Velocimeter::solveRANSAC(const Eigen::MatrixXd& lsq_data,
         if (is_success) {
             const Eigen::VectorXd err = (V - D * local_v_wl_l).array().abs();
 
-            for (std::size_t j = 0; j < err.size(); ++j) {
+            for (std::size_t j = 0; j < static_cast<std::size_t>(err.size()); ++j) {
                 if (err(static_cast<Eigen::Index>(j)) < config_ptr_->inlier_thresh) {
                     local_inlier_idx.push_back(j);
                 }

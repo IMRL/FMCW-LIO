@@ -103,7 +103,7 @@ std::size_t StaticInit::initializeStateCovMap(const std::shared_ptr<MeasPackLI>&
         Eigen::Vector3d unit_mean_acc = specific_force_mean_.normalized();
         Eigen::Vector3d g_wb_w_0 = -config_ptr_->gravity_scale * unit_mean_acc;
 
-        Eigen::Vector3d ba_b_0;
+        Eigen::Vector3d ba_b_0 = Eigen::Vector3d::Zero();
         if (config_ptr_->init_method == InitializationMethod::StaticWithoutBias) {
             ba_b_0 = Eigen::Vector3d::Zero();
         } else if (config_ptr_->init_method == InitializationMethod::StaticWithBias) {
@@ -155,8 +155,8 @@ void StaticInit::addPoseAndMapPoint(const std::shared_ptr<MeasPackLI>& meas_ptr)
     map_ptr_->resize(map_size + scan_size);
 
     // initial map points in world frame
-    std::vector<size_t> point_indices(scan_size);
-    std::for_each(point_indices.begin(), point_indices.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+    std::vector<std::size_t> point_indices(scan_size);
+    std::iota(point_indices.begin(), point_indices.end(), std::size_t{0});
     std::for_each(std::execution::par,
                   point_indices.begin(), point_indices.end(),
                   [&](const auto point_idx) -> void {

@@ -425,9 +425,11 @@ void KD_TREE<PointType>::Build(PointVector point_cloud)
 template <typename PointType>
 void KD_TREE<PointType>::Nearest_Search(PointType point, int k_nearest, PointVector &Nearest_Points, vector<float> &Point_Distance, float max_dist)
 {
-    MANUAL_HEAP q(2 * k_nearest);
-    q.clear();
-    vector<float>().swap(Point_Distance);
+    //MANUAL_HEAP q(2 * k_nearest);
+    //q.clear();
+    thread_local MANUAL_HEAP q(2 * k_nearest);
+    q.reserve(2 * k_nearest);
+    //vector<float>().swap(Point_Distance);
     if (Rebuild_Ptr == nullptr || *Rebuild_Ptr != Root_Node)
     {
         Search(Root_Node, k_nearest, point, q, max_dist);
@@ -449,12 +451,20 @@ void KD_TREE<PointType>::Nearest_Search(PointType point, int k_nearest, PointVec
         pthread_mutex_unlock(&search_flag_mutex);
     }
     int k_found = min(k_nearest, int(q.size()));
-    PointVector().swap(Nearest_Points);
-    vector<float>().swap(Point_Distance);
-    for (int i = 0; i < k_found; i++)
+    //PointVector().swap(Nearest_Points);
+    //vector<float>().swap(Point_Distance);
+    //for (int i = 0; i < k_found; i++)
+    //{
+    //    Nearest_Points.insert(Nearest_Points.begin(), q.top().point);
+    //    Point_Distance.insert(Point_Distance.begin(), q.top().dist);
+    //    q.pop();
+    //}
+    Nearest_Points.resize(k_found);
+    Point_Distance.resize(k_found);
+    for (int i = k_found - 1; i >= 0; i--)
     {
-        Nearest_Points.insert(Nearest_Points.begin(), q.top().point);
-        Point_Distance.insert(Point_Distance.begin(), q.top().dist);
+        Nearest_Points[i] = q.top().point;
+        Point_Distance[i] = q.top().dist;
         q.pop();
     }
     return;
@@ -497,7 +507,8 @@ int KD_TREE<PointType>::Add_Points(PointVector &PointToAdd, bool downsample_on)
             mid_point.x = Box_of_Point.vertex_min[0] + (Box_of_Point.vertex_max[0] - Box_of_Point.vertex_min[0]) / 2.0;
             mid_point.y = Box_of_Point.vertex_min[1] + (Box_of_Point.vertex_max[1] - Box_of_Point.vertex_min[1]) / 2.0;
             mid_point.z = Box_of_Point.vertex_min[2] + (Box_of_Point.vertex_max[2] - Box_of_Point.vertex_min[2]) / 2.0;
-            PointVector().swap(Downsample_Storage);
+            //PointVector().swap(Downsample_Storage);
+            Downsample_Storage.clear();
             Search_by_range(Root_Node, Box_of_Point, Downsample_Storage);
             min_dist = calc_dist(PointToAdd[i], mid_point);
             downsample_result = PointToAdd[i];
@@ -764,7 +775,8 @@ void KD_TREE<PointType>::Rebuild(KD_TREE_NODE **root)
 }
 
 template <typename PointType>
-int KD_TREE<PointType>::Delete_by_range(KD_TREE_NODE **root, BoxPointType boxpoint, bool allow_rebuild, bool is_downsample)
+//int KD_TREE<PointType>::Delete_by_range(KD_TREE_NODE **root, BoxPointType boxpoint, bool allow_rebuild, bool is_downsample)
+int KD_TREE<PointType>::Delete_by_range(KD_TREE_NODE **root, const BoxPointType &boxpoint, bool allow_rebuild, bool is_downsample)
 {
     if ((*root) == nullptr || (*root)->tree_deleted)
         return 0;
@@ -992,7 +1004,8 @@ void KD_TREE<PointType>::Add_by_range(KD_TREE_NODE **root, BoxPointType boxpoint
 }
 
 template <typename PointType>
-void KD_TREE<PointType>::Add_by_point(KD_TREE_NODE **root, PointType point, bool allow_rebuild, int father_axis)
+//void KD_TREE<PointType>::Add_by_point(KD_TREE_NODE **root, PointType point, bool allow_rebuild, int father_axis)
+void KD_TREE<PointType>::Add_by_point(KD_TREE_NODE **root, const PointType &point, bool allow_rebuild, int father_axis)
 {
     if (*root == nullptr)
     {
@@ -1059,13 +1072,17 @@ void KD_TREE<PointType>::Add_by_point(KD_TREE_NODE **root, PointType point, bool
 }
 
 template <typename PointType>
-void KD_TREE<PointType>::Search(KD_TREE_NODE *root, int k_nearest, PointType point, MANUAL_HEAP &q, float max_dist)
+//void KD_TREE<PointType>::Search(KD_TREE_NODE *root, int k_nearest, PointType point, MANUAL_HEAP &q, float max_dist)
+void KD_TREE<PointType>::Search(KD_TREE_NODE *root, int k_nearest, const PointType &point, MANUAL_HEAP &q, float max_dist)
 {
     if (root == nullptr || root->tree_deleted)
         return;
-    float cur_dist = calc_box_dist(root, point);
+    //float cur_dist = calc_box_dist(root, point);
+    //float max_dist_sqr = max_dist * max_dist;
+    //if (cur_dist > max_dist_sqr)
+    //    return;
     float max_dist_sqr = max_dist * max_dist;
-    if (cur_dist > max_dist_sqr)
+    if ((max_dist_sqr < INFINITY) && (calc_box_dist(root, point) > max_dist_sqr))
         return;
     int retval;
     if (root->need_push_down_to_left || root->need_push_down_to_right)
@@ -1244,7 +1261,8 @@ void KD_TREE<PointType>::Search(KD_TREE_NODE *root, int k_nearest, PointType poi
 }
 
 template <typename PointType>
-void KD_TREE<PointType>::Search_by_range(KD_TREE_NODE *root, BoxPointType boxpoint, PointVector &Storage)
+//void KD_TREE<PointType>::Search_by_range(KD_TREE_NODE *root, BoxPointType boxpoint, PointVector &Storage)
+void KD_TREE<PointType>::Search_by_range(KD_TREE_NODE *root, const BoxPointType &boxpoint, PointVector &Storage)
 {
     if (root == nullptr)
         return;

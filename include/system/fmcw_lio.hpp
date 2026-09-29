@@ -87,7 +87,7 @@ public:
     [[nodiscard]] std::shared_ptr<StateBase> getState() const noexcept { return state_system_ptr_; }
 
     // get covariance
-    [[nodiscard]] Eigen::MatrixXd getCovariance() const noexcept { return filter_ptr_->getCovariance(); }
+    [[nodiscard]] const Eigen::MatrixXd& getCovariance() const noexcept { return filter_ptr_->getCovariance(); }
 
     // get initial map
     [[nodiscard]] PointCloudType::Ptr getMapInit() const noexcept { return map_init_ptr_; }
@@ -147,7 +147,7 @@ public:
 
 private:
     // dial forward LiDAR and IMU measurement according to state time
-    void dialForwardMeasLI(const std::shared_ptr<MeasPackLI>& meas_ptr);
+    void dialForwardMeasLI(const std::shared_ptr<MeasPackLI>& meas_ptr) const;
 
 public:
     // FMCW-LIO system neon

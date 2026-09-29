@@ -85,13 +85,13 @@ private:
     // linear interpolation
     static double weightLinearInterpolation(const double time_ratio) { return time_ratio; }
     // right endpoint
-    static double weightRightEndpoint(const double time_ratio) { return 1.0; }
+    static double weightRightEndpoint([[maybe_unused]] const double time_ratio) { return 1.0; }
 
     // weight IMU angular rate and specific force measurement for point
-    inline std::pair<Eigen::Vector3d, Eigen::Vector3d> weightIMUMeas(const Eigen::Vector3d& omg_head, const Eigen::Vector3d& f_head,
-                                                                     const Eigen::Vector3d& omg_tail, const Eigen::Vector3d& f_tail,
-                                                                     const double dt_imu = 5.0e-3,
-                                                                     const double dt = 0.0) {
+    [[nodiscard]] inline std::pair<Eigen::Vector3d, Eigen::Vector3d> weightIMUMeas(const Eigen::Vector3d& omg_head, const Eigen::Vector3d& f_head,
+                                                                                   const Eigen::Vector3d& omg_tail, const Eigen::Vector3d& f_tail,
+                                                                                   const double dt_imu = 5.0e-3,
+                                                                                   const double dt = 0.0) const {
         // time duration ratio
         double time_ratio = dt / dt_imu;
         double weight = point_weight_func_(time_ratio);

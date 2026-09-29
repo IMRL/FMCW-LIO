@@ -57,6 +57,10 @@
 
 #include <omp.h>
 #include <sys/times.h>
+#ifdef HAS_CPUID
+#include <cpuid.h>
+#include <boost/algorithm/string/trim.hpp>
+#endif
 
 #include <nav_msgs/Odometry.h>
 #include <tf/transform_broadcaster.h>
@@ -89,6 +93,7 @@ void ConverterLiDAR::convertLiDAR(const MsgPtrVariant& msg_ptr_in,
                                   PointCloudType::Ptr& scan_ptr_out) {
     // clear previous point cloud
     scan_filtered_ptr_->clear();
+    point_keys_.clear();
 
     // point cloud conversion
     std::visit([&](auto&& msg_lambda) -> void {
@@ -110,17 +115,35 @@ void ConverterLiDAR::convertLiDAR(const MsgPtrVariant& msg_ptr_in,
             return;
         }
         scan_filtered_ptr_->reserve(point_size);
+        point_keys_.reserve(point_size);
 
         // collect valid point from message
         const std::size_t start_idx = (is_livox_msg ? 1 : 0);
         const std::size_t livox_scan_line_num = 6;
 
+        // point select interval and select phase of point index
+        const std::size_t point_select_interval = config_ptr_->point_select_interval;
+        std::size_t point_select_phase = start_idx % point_select_interval;
+
+        sensor_msgs::PointCloud2::ConstPtr msg_const_ptr;
         if constexpr (!is_livox_msg) {
-            lidar_ptr_->parseFirstPointTimestamp(msg_lambda);
+            msg_const_ptr = msg_lambda;
+            lidar_ptr_->parseFirstPointTimestamp(msg_const_ptr);
         }
 
         double msg_timestamp_correction = 0.0;
         for (std::size_t i = start_idx; i < point_size; ++i) {
+            // point select flag
+            const bool is_point_selected = (point_select_phase == 0);
+            point_select_phase = ((point_select_phase + 1) == point_select_interval) ? 0 :
+                                                                                       (point_select_phase + 1);
+
+            // unselected point is only needed for scan end timestamp correction
+            if (!is_point_selected &&
+                !config_ptr_->scan_end_timestamp) {
+                continue;
+            }
+
             // field:  timestamp, x, y, z, intensity
             float timestamp, x, y, z, intensity;
 
@@ -131,7 +154,7 @@ void ConverterLiDAR::convertLiDAR(const MsgPtrVariant& msg_ptr_in,
                 z = msg_lambda->points[i].z;
                 intensity = msg_lambda->points[i].reflectivity;
             } else {
-                lidar_ptr_->parsePointField(msg_lambda,
+                lidar_ptr_->parsePointField(msg_const_ptr,
                                             i,
                                             timestamp, x, y, z, intensity);
             }
@@ -150,7 +173,7 @@ void ConverterLiDAR::convertLiDAR(const MsgPtrVariant& msg_ptr_in,
             }
 
             if (condition &&
-                ((i % config_ptr_->point_select_interval) == 0)) {
+                is_point_selected) {
                 double range_squared = (x * x) + (y * y) + (z * z);
 
                 if (range_squared >= config_ptr_->skip_radius_squared) {
@@ -162,15 +185,19 @@ void ConverterLiDAR::convertLiDAR(const MsgPtrVariant& msg_ptr_in,
                     added_pt.z = z;
                     added_pt.intensity = intensity;
 
+                    point_keys_.emplace_back(timestamp, static_cast<std::uint32_t>(scan_filtered_ptr_->points.size()));
                     scan_filtered_ptr_->points.push_back(added_pt);
                 }
             }
         }
 
         // sort point via timestamp
-        *scan_ptr_out = *scan_filtered_ptr_;
-        std::sort(scan_ptr_out->points.begin(), scan_ptr_out->points.end(),
-                  [](PointType& x, PointType& y) -> bool { return (x.curvature < y.curvature); });
+        std::sort(point_keys_.begin(), point_keys_.end(),
+                  [](const std::pair<float, std::uint32_t>& x, const std::pair<float, std::uint32_t>& y) -> bool { return (x.first < y.first); });
+        scan_ptr_out->points.reserve(point_keys_.size());
+        for (const auto& point_key : point_keys_) {
+            scan_ptr_out->points.push_back(scan_filtered_ptr_->points[point_key.second]);
+        }
 
         // if scan message timestamp is at scan end then correct it to scan begin
         if (config_ptr_->scan_end_timestamp) {
@@ -224,7 +251,8 @@ BitHub::BitHub(ros::NodeHandle& nh,
     }
 
     // prepare recording file
-    if (config_ptr_->dump_pose) {
+    if (config_ptr_->dump_pose ||
+        config_ptr_->dump_map) {
         auto now = std::chrono::system_clock::now();
         std::time_t now_time_t = std::chrono::system_clock::to_time_t(now);
         std::tm now_tm{};
@@ -259,8 +287,17 @@ BitHub::BitHub(ros::NodeHandle& nh,
             std::filesystem::remove(map_file_path_);
         }
 
-        std::filesystem::create_directories(std::filesystem::path(config_ptr_->pose_dir_path.c_str()));
-        poses_file_.open(pose_file_path.c_str());
+        if (config_ptr_->dump_pose) {
+            if (!config_ptr_->pose_dir_path.empty()) {
+                std::filesystem::create_directories(std::filesystem::path(config_ptr_->pose_dir_path.c_str()));
+            }
+
+            poses_file_.open(pose_file_path.c_str());
+        }
+        if (config_ptr_->dump_map &&
+            !config_ptr_->map_dir_path.empty()) {
+            std::filesystem::create_directories(std::filesystem::path(config_ptr_->map_dir_path.c_str()));
+        }
     }
 
     // initialize map point cloud
@@ -293,12 +330,10 @@ void BitHub::callIMU(const sensor_msgs::Imu::ConstPtr& msg_ptr_in) {
 }
 
 void BitHub::callLiDAR(const topic_tools::ShapeShifter::ConstPtr& msg_ptr_in) {
-    // get LiDAR message and push it into buffer
-    mtx_.lock();
-
+    // get LiDAR message and convert it
     MsgPtrVariant msg_ptr_variant;
     if (config_ptr_->lidar_type != LiDARType::Livox) {
-        msg_ptr_variant = sensor_msgs::PointCloud2::Ptr(new sensor_msgs::PointCloud2(*msg_ptr_in->instantiate<sensor_msgs::PointCloud2>()));
+        msg_ptr_variant = msg_ptr_in->instantiate<sensor_msgs::PointCloud2>();
     } else {
         livox_ros_driver::CustomMsg::Ptr livox_custom_msg(new livox_ros_driver::CustomMsg());
 
@@ -318,9 +353,12 @@ void BitHub::callLiDAR(const topic_tools::ShapeShifter::ConstPtr& msg_ptr_in) {
     converter_lidar_ptr_->convertLiDAR(msg_ptr_variant,
                                        ptr);
 
+    // push LiDAR scan into buffer
+    mtx_.lock();
     std::visit([&](auto&& msg_lambda) -> void {
         if (msg_lambda->header.stamp.toSec() < last_scan_timestamp_) {
             scan_ptr_buffer_.clear();
+            time_buffer_.clear();
         }
 
         last_scan_timestamp_ = msg_lambda->header.stamp.toSec();
@@ -474,6 +512,13 @@ void BitHub::publishTF(const std::shared_ptr<const StateBase>& state_ptr) {
 }
 
 void BitHub::dumpMap() {
+    // check map point cloud
+    if (map_wait_dump_ptr_->points.empty()) {
+        std::cout << "The whole map is empty, nothing is saved." << std::endl;
+
+        return;
+    }
+
     // downsampled map
     PointCloudType::Ptr map_point_cloud(new PointCloudType());
     voxel_filter_map_.setInputCloud(map_wait_dump_ptr_);
@@ -483,7 +528,11 @@ void BitHub::dumpMap() {
               << " , is saved to " << map_file_path_ << " ." << std::endl;
 
     pcl::PCDWriter map_writer;
-    map_writer.writeBinary(map_file_path_, *map_point_cloud);
+    try {
+        map_writer.writeBinary(map_file_path_, *map_point_cloud);
+    } catch (const pcl::IOException& e) {
+        std::cerr << "Cannot save map to: " << map_file_path_ << " , " << e.what() << std::endl;
+    }
 }
 
 void BitHub::readPose(const std::string& path, std::deque<StatePoseQuat>& poses_stamp) {
@@ -514,6 +563,10 @@ void BitHub::readPose(const std::string& path, std::deque<StatePoseQuat>& poses_
         ss >> q.y();
         ss >> q.z();
         ss >> q.w();
+
+        if (ss.fail()) {
+            continue;
+        }
 
         StatePoseQuat pose(t, q, p);
         poses_stamp.push_back(pose);
@@ -599,6 +652,11 @@ void BitHub::publishPath() {
 void BitHub::publishPathGT() {
     // get ground truth pose in world frame
     const auto state_ptr = fmcw_lio_ptr_->getState();
+
+    if (poses_gt_it_ == poses_gt_.end()) {
+        return;
+    }
+
     while ((poses_gt_it_->getTime() - state_ptr->getTime()) < -0.01) {
         poses_gt_it_ += 1;
 
@@ -635,13 +693,13 @@ void BitHub::publishPathGT() {
     }
 }
 
-void BitHub::publishOdometry() {
+void BitHub::publishOdometry() const {
     // get estimated pose and body velocity
     const auto state_ptr = fmcw_lio_ptr_->getState();
     const auto R_wb = state_ptr->getRotation();
     const auto v_wb_b = (state_ptr->getRotation().transpose() * state_ptr->getVelocity()).eval();
     const auto p_wb_w = state_ptr->getPosition();
-    const auto P = fmcw_lio_ptr_->getCovariance();
+    const auto& P = fmcw_lio_ptr_->getCovariance();
 
     nav_msgs::Odometry odom;
 
@@ -678,7 +736,7 @@ void BitHub::publishOdometry() {
     publishTF(state_ptr);
 }
 
-void BitHub::publishMapInit() {
+void BitHub::publishMapInit() const {
     // get map established during initialization
     const auto map_init_ptr = fmcw_lio_ptr_->getMapInit();
 
@@ -693,17 +751,20 @@ void BitHub::publishMapInit() {
 void BitHub::publishScanInWorld() {
     // transform LiDAR scan point cloud to world frame
     const auto state_ptr = fmcw_lio_ptr_->getState();
+    const auto R_wb = state_ptr->getRotation();
+    const auto p_wb_w = state_ptr->getPosition();
+
     PointCloudType::Ptr scan_pub_lidar(config_ptr_->publish_dense_scan ? fmcw_lio_ptr_->getScanFullInLiDAR() :
                                                                          fmcw_lio_ptr_->getScanDownSampledInLiDAR());
     const auto pt_pub_size = scan_pub_lidar->points.size();
     PointCloudType::Ptr scan_pub_world(new PointCloudType(pt_pub_size, 1));
 
     std::vector<std::size_t> point_indices(pt_pub_size);
-    std::for_each(point_indices.begin(), point_indices.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+    std::iota(point_indices.begin(), point_indices.end(), std::size_t{0});
     std::for_each(std::execution::par,
                   point_indices.begin(), point_indices.end(),
                   [&](auto point_idx) -> void {
-        transformPointLiDARToWorld(state_ptr,
+        transformPointLiDARToWorld(R_wb, p_wb_w,
                                    scan_pub_lidar->points[point_idx],
                                    scan_pub_world->points[point_idx]);
     });
@@ -728,7 +789,7 @@ void BitHub::publishScanInWorld() {
     }
 }
 
-void BitHub::publishScanInBody() {
+void BitHub::publishScanInBody() const {
     // transform LiDAR scan point cloud to body frame
     const auto state_ptr = fmcw_lio_ptr_->getState();
     const auto scan_compensated_ptr = fmcw_lio_ptr_->getScanFullInLiDAR();
@@ -736,7 +797,7 @@ void BitHub::publishScanInBody() {
     PointCloudType::Ptr scan_pub_body(new PointCloudType(pt_comp_size, 1));
 
     std::vector<std::size_t> point_indices(pt_comp_size);
-    std::for_each(point_indices.begin(), point_indices.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+    std::iota(point_indices.begin(), point_indices.end(), std::size_t{0});
     std::for_each(std::execution::par,
                   point_indices.begin(), point_indices.end(),
                   [&](auto point_idx) -> void {
@@ -752,7 +813,7 @@ void BitHub::publishScanInBody() {
     pub_point_cloud_body_.publish(scan_msg);
 }
 
-void BitHub::publishDynamicScanInBody() {
+void BitHub::publishDynamicScanInBody() const {
     // transform dynamic LiDAR scan point cloud to body frame
     const auto state_ptr = fmcw_lio_ptr_->getState();
     const auto scan_dynamic_lidar_ptr = fmcw_lio_ptr_->getScanDynamicInLiDAR();
@@ -760,7 +821,7 @@ void BitHub::publishDynamicScanInBody() {
     PointCloudType::Ptr scan_pub_body(new PointCloudType(pt_dyna_size, 1));
 
     std::vector<std::size_t> point_indices(pt_dyna_size);
-    std::for_each(point_indices.begin(), point_indices.end(), [n = 0](std::size_t& idx) mutable -> void { idx = n++; });
+    std::iota(point_indices.begin(), point_indices.end(), std::size_t{0});
     std::for_each(std::execution::par,
                   point_indices.begin(), point_indices.end(),
                   [&](auto point_idx) -> void {
@@ -776,13 +837,9 @@ void BitHub::publishDynamicScanInBody() {
     pub_dynamic_point_cloud_body_.publish(scan_msg);
 }
 
-void BitHub::transformPointLiDARToWorld(const std::shared_ptr<StateBase>& state_ptr,
+void BitHub::transformPointLiDARToWorld(const Eigen::Matrix3d& R_wb, const Eigen::Vector3d& p_wb_w,
                                         const PointType& pt_in,
-                                        PointType& pt_out) {
-    // get rotation and position of body frame in world frame
-    const auto R_wb = state_ptr->getRotation();
-    const auto p_wb_w = state_ptr->getPosition();
-
+                                        PointType& pt_out) const {
     // transform point from LiDAR frame to world frame
     Eigen::Vector3d p_lp_l{pt_in.x, pt_in.y, pt_in.z};
     Eigen::Vector3d p_wp_w = (R_wb * ((config_ptr_->R_bl * p_lp_l) + config_ptr_->p_bl_b)) + p_wb_w;
@@ -795,7 +852,7 @@ void BitHub::transformPointLiDARToWorld(const std::shared_ptr<StateBase>& state_
 }
 
 void BitHub::transformPointLiDARToBody(const PointType& pt_in,
-                                       PointType& pt_out) {
+                                       PointType& pt_out) const {
     // get point position in LiDAR frame
     const Eigen::Vector3d p_lp_l{pt_in.x, pt_in.y, pt_in.z};
     // transform point from LiDAR frame to body frame
@@ -813,6 +870,7 @@ std::string BitHub::getCPUType() {
     std::string cpu_type;
 
 #ifdef HAS_CPUID
+    char CPUBrandString[0x40] = {0};
     unsigned int CPUInfo[4] = {0, 0, 0, 0};
     __cpuid(0x80000000, CPUInfo[0], CPUInfo[1], CPUInfo[2], CPUInfo[3]);
     unsigned int nExIds = CPUInfo[0];
@@ -825,14 +883,14 @@ std::string BitHub::getCPUType() {
         else if (i == 0x80000004)
             memcpy(CPUBrandString + 32, CPUInfo, sizeof(CPUInfo));
     }
-    this->cpu_type = CPUBrandString;
-    boost::trim(this->cpu_type);
+    cpu_type = CPUBrandString;
+    boost::trim(cpu_type);
 #endif
 
     return cpu_type;
 }
 
-void BitHub::printSystemInfo() {
+void BitHub::printSystemInfo() const {
     // print system information into terminal
     const auto state_ptr = fmcw_lio_ptr_->getState();
     static double distance_traveled = 0.0;
@@ -967,8 +1025,8 @@ void BitHub::printSystemInfo() {
     std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
     std::string utime, stime, cutime, cstime, priority, nice;
     std::string thread_num, itrealvalue, starttime;
-    unsigned long vsize;
-    long rss;
+    unsigned long vsize = 0;
+    long rss = 0;
 
     stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr >> tpgid >> flags >> minflt >> cminflt
                 >> majflt >> cmajflt >> utime >> stime >> cutime >> cstime >> priority >> nice >> thread_num
@@ -1353,7 +1411,7 @@ void BitHub::printSystemInfo() {
             << seconds << " s ";
     std::string run_str = run_oss.str();
 
-    int space_count = static_cast<int>(total_space - asc_time.length() - run_str.length() - 1);
+    int space_count = total_space - static_cast<int>(asc_time.length()) - static_cast<int>(run_str.length()) - 1;
     space_count = std::max(0, space_count);
 
     std::cout << "| " << asc_time << std::string(static_cast<std::size_t>(space_count), ' ') << run_str << "|" << std::endl;
@@ -1606,7 +1664,7 @@ void BitHub::printSystemInfo() {
     oss << "  (Total Point Number: " << std::setw(11) << scan_down_lidar_ptr->points.size() << ")";
     std::size_t current_len = oss.str().size();
 
-    int padding = static_cast<int>(total_space - current_len + 1);
+    int padding = total_space - static_cast<int>(current_len) + 1;
     padding = std::max(0, padding);
 
     oss << std::string(static_cast<std::size_t>(padding), ' ') << "|";

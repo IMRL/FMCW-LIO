@@ -66,7 +66,7 @@ class SO3 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    SO3() noexcept = default;
+    SO3() noexcept : q_(Eigen::Quaterniond::Identity()) {}
 
     explicit SO3(const Eigen::Quaterniond& q) : q_(q) {
         // normalize via quaternion normalization
@@ -150,10 +150,10 @@ public:
     inline SO3 operator*(const SO3& R) const noexcept { return SO3(q_ * R.q_); }
 
     // right * with a rotation matrix
-    inline SO3 operator*(const Eigen::Matrix3d& R_mat) const { return SO3(q_ * Eigen::Quaterniond(R_mat).normalized()); }
+    inline SO3 operator*(const Eigen::Matrix3d& R_mat) const noexcept { return SO3(q_ * Eigen::Quaterniond(R_mat).normalized()); }
 
     // right * with a quaternion element
-    inline SO3 operator*(const Eigen::Quaterniond& q) const { return SO3(q_ * q.normalized()); }
+    inline SO3 operator*(const Eigen::Quaterniond& q) const noexcept { return SO3(q_ * q.normalized()); }
 
     // right * with a 3D vector
     inline Eigen::Vector3d operator*(const Eigen::Vector3d& v) const noexcept { return q_._transformVector(v); }

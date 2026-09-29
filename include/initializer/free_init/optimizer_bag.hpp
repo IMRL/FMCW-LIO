@@ -250,7 +250,12 @@ private:
     // optimization loss function
     std::unique_ptr<ceres::LossFunction> loss_function_ptr_;
     // optimization problem
-    ceres::Problem problem_;
+    ceres::Problem problem_{[]() -> ceres::Problem::Options {
+        ceres::Problem::Options problem_options;
+        problem_options.loss_function_ownership = ceres::DO_NOT_TAKE_OWNERSHIP;
+
+        return problem_options;
+    }()};
 
     // ID to avoid adding the same regularization multiple times
     ceres::ResidualBlockId accelerometer_bias_regularization_id_;

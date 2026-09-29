@@ -58,7 +58,7 @@
 // main
 int main(int argc, char* argv[]) {
     // launch FMCW-LIO
-    ros::init(argc, argv, "FMCW-LIO");
+    ros::init(argc, argv, "fmcw_lio_node");
     ros::NodeHandle nh;
 
     // configuration pointer

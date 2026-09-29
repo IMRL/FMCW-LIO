@@ -68,7 +68,9 @@ public:
 
     LoggerInitialization() : is_zero_velocity(false),
                              initialization_time(0.0),
-                             imu_number(0) {}
+                             imu_number(0),
+                             omg_wb_b_0(Eigen::Vector3d::Zero()),
+                             v_wb_b_0(Eigen::Vector3d::Zero()) {}
 
 public:
     bool is_zero_velocity;
@@ -92,7 +94,7 @@ public:
     [[nodiscard]] std::shared_ptr<StateBase> getState() const noexcept { return state_ptr_; }
 
     // get covariance
-    [[nodiscard]] Eigen::MatrixXd getCovariance() const noexcept { return P_; }
+    [[nodiscard]] const Eigen::MatrixXd& getCovariance() const noexcept { return P_; }
 
     // get static point cloud map in world frame
     [[nodiscard]] PointCloudType::Ptr getMap() const noexcept { return map_ptr_; }

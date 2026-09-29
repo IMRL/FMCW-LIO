@@ -68,6 +68,14 @@ public:
     explicit StateBase(const std::size_t dim) noexcept : dim_(dim),
                                                          time_{} {}
 
+    StateBase(const StateBase&) = default;
+
+    StateBase(StateBase&&) = default;
+
+    StateBase& operator=(const StateBase&) = delete;
+
+    StateBase& operator=(StateBase&&) = delete;
+
     virtual ~StateBase() = default;
 
     // clone state

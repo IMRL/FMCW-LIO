@@ -75,8 +75,8 @@ public:
     void bootstrapVelocity(const std::shared_ptr<MeasPackLI>& meas_ptr);
 
     // solve least square problem to estimate velocity and covariance
-    bool solveLSQ(const Eigen::MatrixXd& lsq_data, const Eigen::VectorXd& weight,
-                  Eigen::Vector3d& v_wl_l, Eigen::Matrix3d& R_v);
+    [[nodiscard]] bool solveLSQ(const Eigen::MatrixXd& lsq_data, const Eigen::VectorXd& weight,
+                                Eigen::Vector3d& v_wl_l, Eigen::Matrix3d& R_v) const;
 
     // initialize state, covariance, and map
     [[nodiscard]] std::size_t initializeStateCovMap(const std::shared_ptr<MeasPackLI>& meas_ptr);
@@ -85,7 +85,7 @@ public:
     [[nodiscard]] std::shared_ptr<StateBase> getState() const noexcept { return state_ptr_; }
 
     // get covariance
-    [[nodiscard]] Eigen::MatrixXd getCovariance() const noexcept { return P_; }
+    [[nodiscard]] const Eigen::MatrixXd& getCovariance() const noexcept { return P_; }
 
     // get static point cloud map in world frame
     [[nodiscard]] PointCloudType::Ptr getMap() const noexcept { return map_ptr_; }
